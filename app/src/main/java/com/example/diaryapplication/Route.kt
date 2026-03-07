@@ -16,8 +16,9 @@ sealed class Route(val path: String){
     data object Main : Route("main")
 
     // 하단 탭 바
-    data object Home : Route("home")
+    data object Diary : Route("diary")
     data object Chat : Route("chat")
+    data object Home : Route("home")
     data object Report : Route("report")
     data object My : Route("my")
 }

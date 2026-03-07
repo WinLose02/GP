@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.window.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.style.TextAlign
@@ -29,11 +30,10 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-
 @Composable
 fun MyPageScreen(
     padding: PaddingValues,
-    onLogout: () -> Unit = {} // ✅ 로그아웃 시 Login으로 보내는 nav는 여기서 처리
+    onLogout: () -> Unit = {} // 로그아웃 시 Login으로 보내는 nav는 여기서 처리
 ) {
     // 임시 데이터
     var userName by remember { mutableStateOf("d") }
@@ -48,8 +48,6 @@ fun MyPageScreen(
     // PIN 설정
     var pinEnabled by remember { mutableStateOf(false) } // 기본 디폴트 OFF
     var savedPin by remember { mutableStateOf<String?>(null) } // PIN 미설정
-
-
     var showProfileDialog by remember { mutableStateOf(false) }
     var showTimeDialog by remember { mutableStateOf(false) }
     var showPinDialog by remember { mutableStateOf(false) }
@@ -57,7 +55,6 @@ fun MyPageScreen(
     // 활동 요약
     val totalDiary = 0
     val thisMonthDiary = 0
-
     val cardGap = 14.dp
     val sectionGap = 18.dp
 
@@ -73,14 +70,12 @@ fun MyPageScreen(
             verticalArrangement = Arrangement.spacedBy(cardGap)
         ) {
             item { MyHeader() }
-
             item {
                 ProfileHeaderCard(
                     name = nickname,
                     email = email
                 )
             }
-
             item {
                 SectionCard(
                     title = "계정 관리"
@@ -94,7 +89,6 @@ fun MyPageScreen(
                     )
                 }
             }
-
             item {
                 SectionCard(
                     title = "앱 설정"
@@ -112,12 +106,10 @@ fun MyPageScreen(
                             }
                         }
                     )
-
                     Divider(
                         modifier = Modifier.padding(vertical = 12.dp),
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
                     )
-
                     ToggleRow(
                         icon = Icons.Outlined.Lock,
                         title = "PIN 번호 설정",
@@ -134,7 +126,6 @@ fun MyPageScreen(
                     )
                 }
             }
-
             item {
                 SectionCard(title = "나의 활동") {
                     ActivityTwoCards(
@@ -145,9 +136,7 @@ fun MyPageScreen(
                     )
                 }
             }
-
             item { Spacer(Modifier.height(sectionGap)) }
-
             item {
                 OutlinedButton(
                     onClick = onLogout,
@@ -166,12 +155,9 @@ fun MyPageScreen(
                     Text("로그아웃", fontWeight = FontWeight.SemiBold)
                 }
             }
-
-
             item { Spacer(Modifier.height(20.dp)) }
         }
     }
-
     // 프로필 정보 변경 다이얼로그
     if (showProfileDialog) {
         ProfileEditDialog(
@@ -221,7 +207,6 @@ fun MyPageScreen(
         )
     }
 }
-
 @Composable
 private fun MyHeader() {
     Row(
@@ -241,14 +226,11 @@ private fun MyHeader() {
         )
     }
 }
-
 @Composable
 private fun ProfileHeaderCard(name: String, email: String) {
     val shape = RoundedCornerShape(18.dp)
-
     val start = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
     val end = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-
     Surface(
         shape = shape,
         tonalElevation = 1.dp,
@@ -292,7 +274,6 @@ private fun ProfileHeaderCard(name: String, email: String) {
         }
     }
 }
-
 @Composable
 private fun SectionCard(
     title: String,
@@ -305,7 +286,6 @@ private fun SectionCard(
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold
         )
-
         Card(
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -320,7 +300,6 @@ private fun SectionCard(
         }
     }
 }
-
 @Composable
 private fun SettingRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -358,7 +337,6 @@ private fun SettingRow(
         }
     }
 }
-
 @Composable
 private fun ToggleRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -387,7 +365,6 @@ private fun ToggleRow(
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
-
 @Composable
 private fun IconBox(icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Box(
@@ -400,7 +377,6 @@ private fun IconBox(icon: androidx.compose.ui.graphics.vector.ImageVector) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
     }
 }
-
 @Composable
 private fun ActivityTwoCards(
     leftTitle: String,
@@ -413,7 +389,6 @@ private fun ActivityTwoCards(
         MiniStatCard(title = rightTitle, value = rightValue, modifier = Modifier.weight(1f))
     }
 }
-
 @Composable
 private fun MiniStatCard(title: String, value: String, modifier: Modifier = Modifier) {
     Card(
@@ -435,7 +410,6 @@ private fun MiniStatCard(title: String, value: String, modifier: Modifier = Modi
         }
     }
 }
-
 // 다이얼로그 기본 틀 생성
 @Composable
 private fun AppDialogContainer(
@@ -467,7 +441,6 @@ private fun AppDialogContainer(
                         Icon(Icons.Outlined.Close, contentDescription = null)
                     }
                 }
-
                 content()
             }
         }
@@ -487,7 +460,6 @@ private fun ProfileEditDialog(
     var nameState by remember { mutableStateOf(name) }
     var nickState by remember { mutableStateOf(nickname) }
     var birthState by remember { mutableStateOf(birthDate) }
-
     AppDialogContainer(
         title = "프로필 정보 변경",
         subtitle = "프로필 정보를 수정할 수 있습니다",
@@ -495,19 +467,15 @@ private fun ProfileEditDialog(
     ) {
         Text("이름", fontWeight = FontWeight.SemiBold)
         SoftField(value = nameState, onValueChange = { nameState = it })
-
         Text("닉네임", fontWeight = FontWeight.SemiBold)
         SoftField(value = nickState, onValueChange = { nickState = it })
-
         Text("이메일", fontWeight = FontWeight.SemiBold)
         SoftField(value = email, onValueChange = {}, enabled = false)
-
         Text("생년월일", fontWeight = FontWeight.SemiBold)
         BirthDateField(
             value = birthState,
             onChange = { birthState = it }
         )
-
         Spacer(Modifier.height(6.dp))
         PrimaryActionButton(text = "저장하기") {
             onSave(nameState.trim(), nickState.trim(), birthState)
@@ -515,7 +483,8 @@ private fun ProfileEditDialog(
     }
 }
 
-// 기본 다이얼로그을 기반으로 알림 설정 다이얼로그
+// 알림 시간 설정
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NotificationTimeDialog(
     current: LocalTime,
@@ -524,33 +493,62 @@ private fun NotificationTimeDialog(
 ) {
     var time by remember { mutableStateOf(current) }
     val context = LocalContext.current
-
-    AppDialogContainer(
-        title = "알림 시간 설정",
-        subtitle = "일기 작성 알림을 받을 시간을 설정하세요",
-        onDismiss = onDismiss
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     ) {
-        Text("알림 시간", fontWeight = FontWeight.SemiBold)
-
-        TimeField(
-            time = time,
-            onPick = {
-                showAndroidTimePicker(
-                    context = context,
-                    initial = time,
-                    onSelected = { time = it }
-                )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // 헤더
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        "알림 시간 설정",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "일기 작성 알림을 받을 시간을 설정하세요",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Outlined.Close, contentDescription = null)
+                }
             }
-        )
-
-        Spacer(Modifier.height(6.dp))
-        PrimaryActionButton(text = "저장하기") {
-            onSave(time)
+            Text("알림 시간", fontWeight = FontWeight.SemiBold)
+            TimeField(
+                time = time,
+                onPick = {
+                    showAndroidTimePicker(
+                        context = context,
+                        initial = time,
+                        onSelected = { time = it }
+                    )
+                }
+            )
+            Spacer(Modifier.height(4.dp))
+            PrimaryActionButton(text = "저장하기") {
+                onSave(time)
+            }
         }
     }
 }
 
-// 기본 다이얼로그을 기반으로 PIN 적용 다이얼로그
+// PIN 다이얼로그
 @Composable
 private fun PinSetupDialog(
     onDismiss: () -> Unit,
@@ -559,19 +557,15 @@ private fun PinSetupDialog(
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-
     fun validate(): Boolean {
         val p = pin.trim()
         val c = confirm.trim()
-
         if (p.length !in 4..6) { error = "PIN은 4~6자리여야 합니다."; return false } // PIN 번호가 4~6자리 아니면 에러
         if (!p.all { it.isDigit() }) { error = "PIN은 숫자만 입력 가능합니다."; return false } // 모든 글자가 문자이면 에러
         if (p != c) { error = "PIN 번호가 일치하지 않습니다."; return false } // 설정할 PIN 번호와 확인용 PIN 번호 둘이 다르면 에러
-
         error = null
         return true
     }
-
     AppDialogContainer(
         title = "PIN 번호 설정",
         subtitle = "일기 보호를 위한 PIN 번호를 설정하세요",
@@ -582,17 +576,17 @@ private fun PinSetupDialog(
             value = pin,
             onValueChange = { pin = it.filter(Char::isDigit).take(6) },
             placeholder = "PIN 번호 입력",
-            keyboardType = KeyboardType.NumberPassword
+            keyboardType = KeyboardType.NumberPassword,
+            isPassword = true
         )
-
         Text("PIN 번호 확인", fontWeight = FontWeight.SemiBold)
         SoftField(
             value = confirm,
             onValueChange = { confirm = it.filter(Char::isDigit).take(6) },
             placeholder = "PIN 번호 재입력",
-            keyboardType = KeyboardType.NumberPassword
+            keyboardType = KeyboardType.NumberPassword,
+            isPassword = true
         )
-
         if (error != null) {
             Text(
                 error!!,
@@ -600,7 +594,6 @@ private fun PinSetupDialog(
                 style = MaterialTheme.typography.bodySmall
             )
         }
-
         Spacer(Modifier.height(6.dp))
         PrimaryActionButton(text = "PIN 설정하기") {
             if (validate()) onSave(pin.trim())
@@ -611,11 +604,12 @@ private fun PinSetupDialog(
 // 입력 필드
 @Composable
 private fun SoftField(
-    value: String, // 입력 텍스트
-    onValueChange: (String) -> Unit, // 텍스트 바뀔 때 호출
-    enabled: Boolean = true, // 입력 가능 여부
-    placeholder: String? = null, // 힌트 텍스트 -> 여기선 필요 없어서 null
-    keyboardType: KeyboardType = KeyboardType.Text // 키보드 종류
+    value: String,
+    onValueChange: (String) -> Unit,
+    enabled: Boolean = true,
+    placeholder: String? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    isPassword: Boolean = false // true면 입력값을 ●●● 으로 가림
 ) {
     val shape = RoundedCornerShape(14.dp)
     OutlinedTextField(
@@ -626,14 +620,13 @@ private fun SoftField(
         shape = shape,
         placeholder = { if (placeholder != null) Text(placeholder) },
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         colors = OutlinedTextFieldDefaults.colors(
-
             // 포커스 상태(클릭해서 커서가 있을때), 언포커스(그냥 있을 때), 비활성(enabled=false일때)
             // .copy(alpha=___)를 이용해서 색상을 그대로 쓰되 투명도를 조정 (alpha: 투명도)
             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
-
             focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
             unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
             disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f),
@@ -641,7 +634,6 @@ private fun SoftField(
         modifier = Modifier.fillMaxWidth()
     )
 }
-
 @Composable
 private fun BirthDateField(
     value: LocalDate,
@@ -662,9 +654,7 @@ private fun BirthDateField(
         Text(formatted)
         Icon(Icons.Outlined.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-
 }
-
 @Composable
 private fun TimeField(
     time: LocalTime,
@@ -676,7 +666,6 @@ private fun TimeField(
             .replace("AM", "오전")
             .replace("PM", "오후")
     }
-
     Surface(
         onClick = onPick,
         shape = RoundedCornerShape(14.dp),
@@ -698,7 +687,6 @@ private fun TimeField(
         }
     }
 }
-
 @Composable
 private fun PrimaryActionButton(
     text: String,
@@ -714,8 +702,6 @@ private fun PrimaryActionButton(
         Text(text, fontWeight = FontWeight.SemiBold)
     }
 }
-
-
 private fun showAndroidTimePicker(
     context: Context,
     initial: LocalTime,

@@ -19,7 +19,7 @@ import com.example.diaryapplication.ui.theme.AppFieldColor
 @Composable
 fun VerifyCodeScreen(
     email: String, // 인증 번호를 보낼 이메일
-    demoCode: String, // 데모용 인증번호 -> 임시
+    // 데모용 인증번호 -> 임시
     onBack: () -> Unit,
     onVerified: () -> Unit,
     onReEnterEmail: () -> Unit // '이메일 다시 입력' 버튼 클릭 시 실행
@@ -67,8 +67,6 @@ fun VerifyCodeScreen(
                 Text(email, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
 
-                // TODO: 지금은 데모라 추후에 서버와 연동하여 이 부분 수정
-                Text("(데모 인증번호: $demoCode)", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             Text("인증번호", style = MaterialTheme.typography.labelMedium)
