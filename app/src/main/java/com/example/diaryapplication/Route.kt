@@ -7,9 +7,9 @@ sealed class Route(val path: String){
     data object Login : Route("login")
     data object SignUp : Route("signup")
     data object FindId : Route("find_id")
-    data object FindIdResult : Route("find_id_result")
+    data object FindIdResult : Route("find_id_result/{email}")
     data object FindPassword : Route("find_password")
-    data object VerifyCode : Route("verify_code")
+    data object VerifyCode : Route("verify_code/{email}")
     data object ResetPassword : Route("reset_password")
 
     // 메인 화면

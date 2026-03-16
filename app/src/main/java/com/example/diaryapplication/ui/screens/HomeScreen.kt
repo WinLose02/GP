@@ -17,42 +17,110 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.diaryapplication.viewmodel.AuthViewModel
+import com.example.diaryapplication.viewmodel.DiaryViewModel
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
+import java.time.DayOfWeek
+import java.time.temporal.TemporalAdjusters
+
 @Composable
 fun HomeScreen(
-    padding: PaddingValues,
-    onWriteDiary: () -> Unit,
+    padding: PaddingValues, // 패딩 값
+    onWriteDiary: () -> Unit, // 일기로 답하기 버튼 클릭 시 일기 작성 화면으로 이동
+    authViewModel: AuthViewModel, // DB에서 닉네임을 읽어오기 위한 ViewModel
+    diaryViewModel: DiaryViewModel // 스트릿 데이터를 가져오기 위한 DiaryViewModel
 ) {
-// 임시 데이터
-    val userName = "찬영"
-    val today = remember { LocalDate.now() } // 오늘 날짜 가져오기
+
+    // 실시간으로 ViewModel에서 사용자의 닉네임을 받아옴
+    val nickname by authViewModel.currentNickname.collectAsState()
+    val userName = nickname ?: "사용자" // 닉네임이 null이면 "사용자"로 표시
+
+    val today = remember { LocalDate.now() } // 오늘 날짜 가져오기 (재계산 방지를 위해 remember)
     val greeting = when (today.hour) { // 현재 시간의 시간(Hour)를 가져와서
-// 시간대 별로 인사 멘트 다르게 하기
+
+        // 시간대 별로 인사 멘트 다르게 하기
         in 5..11 -> "좋은 아침이에요"
         in 12..16 -> "좋은 오후에요"
         in 17..20 -> "좋은 저녁이에요"
         in 21 .. 24 -> "좋은 밤이에요"
         else -> "안녕하세요"
     }
-// 임시 마음 날씨 데이터 - 이번 주 요일별
-// 이번 주 월~오늘까지만 표시
-// TODO: DB 연동 후에 코드 수정
-    val weekWeatherEmojis = listOf("🌧", "⛅", "☁", "🌤", "🌥", "☀")
-    val weekDayLabels = listOf("월", "화", "수", "목", "금", "토")
-// TODO: 이번 주 날짜 범위 텍스트 (임시 데이터)
-    val weekRangeLabel = "3월 1일 ~ 3월 7일"
-// TODO: 임시 스트릭 데이터 (DB 연동 전)
-// true = 기록함, false = 기록 안 함
-    val streakData = listOf(
-        listOf(true, true, true, true, true, true, true), // 1주차
-        listOf(true, true, true, true, true, true, true), // 2주차
-        listOf(true, true, true, true, true, true, true), // 3주차
-        listOf(false, false, false, false, false, false, true) // 4주차 (오늘만 기록)
-    )
-    val streakCount = 22 // TODO: 연속 기록 일수 -> 임시 데이터
-// 오늘의 질문 -> 이 부분은 질문을 여러개 만들어서 랜덤으로 출력해도 괜찮을 부분
+
+    // 화면이 처음 표시될 때, 이번 달 스트릿 데이터를 불러옴
+    LaunchedEffect(Unit) { diaryViewModel.loadMonthStreak() }
+
+    // DiaryViewModel에서 실시간으로 정보들을 받아옴
+    val writtenDates by diaryViewModel.writtenDates.collectAsState() // 일기를 작성한 날짜 목록
+    val streakCount by diaryViewModel.streakCount.collectAsState() // 연속으로 작성한 일수
+    val streakGrid = remember(writtenDates, today) { // 스트릿 그리드를 생성
+        // writtenDates와 today가 바뀔때만 계산을 함
+
+        val firstDay = today.withDayOfMonth(1) // 이번 달 1일(첫날)의 날짜
+        val lastDayOfMonth = today.with(TemporalAdjusters.lastDayOfMonth()).dayOfMonth // 이번 달 마지막 날짜의 숫자(3월 -> 31일)
+        val startOffset = firstDay.dayOfWeek.value % 7 // 1일이 무슨 요일인지 계산 -> 월(1), 화(2), ... , 일(0)
+
+        /*
+            >> 이번 달을 표시하는 데 필요한 주의 수를 계산
+            >> 3월의 경우 5주이므로 5개의 주가 필요
+            >> [startOffset(1일이 무슨 요일인지) + lastDayOfMonth(이번달 마지막 일 수) + 6] / 7 로 계산
+
+            [EX] 2026년 3월을 기준으로 하면,
+                 1. 3월 1일은 일요일(startOffset = 0)
+                 2. 3월은 31일까지 있음(lastDayOfMonth=31)
+                 3. (0 + 31 + 6) / 7 = 5.xxx
+                 4. 총 3월의 스트릿 그리드는 5줄이 필요
+        */
+
+        val weeks = (startOffset + lastDayOfMonth + 6) / 7
+        List(weeks) { weekIdx -> // 주(week) X 7일의 2차원 리스트 생성
+            List(7) { dayIdx ->
+                val dayOfMonth = weekIdx * 7 + dayIdx - startOffset + 1 // 현재 칸의 날짜 숫자를 계산
+                when {
+                    dayOfMonth < 1 || dayOfMonth > lastDayOfMonth -> null // 이번 달 범위 밖이면 null -> 투명칸
+                    else -> {
+                        val date = today.withDayOfMonth(dayOfMonth) // 날짜를 실제 LocalDate로 변환
+                        if (date.isAfter(today)) null // 오늘 이후의 날짜이면 null을 반환(투명)
+                        else writtenDates.contains(date.toString()) // 아니면 일기 작성여부를 판단해서 회색(false)/파란색(true)를 결정
+                    }
+                }
+            }
+        }
+    }
+
+    // 이번 주 나의 마음 날시 부분
+
+    // 이번 주 일요일 날짜를 계산
+    // previousOrSame -> 오늘이 일요일이면 오늘, 아니면 가장 최근 일요일
+    // EX> 3월 12일(목)이면, 가장 최근 일요일인 3월 8일(일) 반환
+    val weekStart = remember(today) { today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY)) }
+
+    // 이번 주 일요일 ~ 오늘까지의 날씨 이모지 목록을 생성
+    // plusDays -> 일요일에서 i일을 더한 날짜
+    // takeIf -> 오늘 이후의 날짜는 제외
+    // .let{} -> 해당 날짜가 있으면 이모지를 추가하되, 현재는 하드 코딩으로 임시로 대체한 상태
+    val weekWeatherEmojis = remember(today) {
+        (0..6).mapNotNull { i -> weekStart.plusDays(i.toLong()).takeIf { !it.isAfter(today) }?.let { "⛅" } }
+    }
+
+    // 이번주 일요일~오늘까지의 요일 라벨 목록을 생성
+    val weekDayLabels = remember(today) {
+        val names = listOf("일","월","화","수","목","금","토")
+        // d -> names[d.dayOfWeek.value%7] ==> names[0]="일", names[1]="월" 형태로 계산해서
+        // 요일 라벨을 만들기 위함
+        (0..6).mapNotNull { i -> weekStart.plusDays(i.toLong()).takeIf { !it.isAfter(today) }?.let { d -> names[d.dayOfWeek.value % 7] } }
+    }
+
+    // 3월 8일 ~ 14일 형태의 주간 범위 텍스트를 생성
+    val weekRangeLabel = remember(today) {
+        val weekEnd = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))
+        if (weekStart.monthValue == weekEnd.monthValue) "${weekStart.monthValue}월 ${weekStart.dayOfMonth}일 ~ ${weekEnd.dayOfMonth}일"
+        else "${weekStart.monthValue}월 ${weekStart.dayOfMonth}일 ~ ${weekEnd.monthValue}월 ${weekEnd.dayOfMonth}일"
+    }
+
+    // TODO: 오늘의 질문 -> 이 부분은 질문을 여러개 만들어서 랜덤으로 출력해도 괜찮을것 같음
     val todayQuestion = "오늘 가장 마음이 편했던 순간은 언제였나요?"
     Column(
         modifier = Modifier
@@ -63,21 +131,21 @@ fun HomeScreen(
             .padding(horizontal = 20.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-// 헤더 인사말
+        // 헤더 인사말
         HomeGreetingHeader(
             greeting = greeting,
             userName = userName,
             today = today
         )
         Spacer(Modifier.height(8.dp))
-// 오늘의 질문
+        // 오늘의 질문
         TodayQuestionCard(
             question = todayQuestion,
             onWriteDiary = onWriteDiary
         )
-// 이번달 나의 기록 (스트릿 + 마음 일기 데이터)
+        // 이번달 나의 기록 (스트릿 + 마음 일기 데이터)
         MonthlyRecordCard(
-            streakData = streakData,
+            streakGrid = streakGrid,
             streakCount = streakCount,
             weekWeatherEmojis = weekWeatherEmojis,
             weekDayLabels = weekDayLabels,
@@ -121,7 +189,7 @@ private fun HomeGreetingHeader(
 @Composable
 private fun TodayQuestionCard(
     question: String,
-    onWriteDiary: () -> Unit
+    onWriteDiary: () -> Unit // 일기로 답하기 버튼을 클릭 시, 일기 작성 화면으로 전환
 ) {
     val gradient = androidx.compose.ui.graphics.Brush.verticalGradient(
         colors = listOf(
@@ -180,7 +248,7 @@ private fun TodayQuestionCard(
 // TODO: 추후 여기도 수정 가능성
 @Composable
 private fun MonthlyRecordCard(
-    streakData: List<List<Boolean>>, // 4주 x 7일
+    streakGrid: List<List<Boolean?>>, // 4주 x 7일
     streakCount: Int,
     weekWeatherEmojis: List<String>, // 이번 주 요일별 날씨 이모지
     weekDayLabels: List<String>, // ["월", "화", "수", "목", "금", ...]
@@ -196,7 +264,7 @@ private fun MonthlyRecordCard(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-// 카드 헤더
+            // 카드 헤더
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
@@ -231,9 +299,9 @@ private fun MonthlyRecordCard(
                     )
                 }
             }
-// 스트릿 데이터 그리드
+            // 스트릿 데이터 그리드
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                streakData.forEach { week -> // 주(1주,2주,..)만큼 반복
+                streakGrid.forEach { week -> // 주(1주,2주,..)만큼 반복
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -245,20 +313,24 @@ private fun MonthlyRecordCard(
                                     .height(24.dp)
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(
-                                        if (recorded) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceVariant
+                                        when (recorded) {
+                                            true -> MaterialTheme.colorScheme.primary
+                                            false -> MaterialTheme.colorScheme.surfaceVariant
+                                            null -> Color.Transparent
+                                        }
                                     )
                             )
                         }
                     }
                 }
             }
-// 구분선
+            // 구분선
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 thickness = 1.dp
             )
-// 마음 날씨 헤더
+
+            // 마음 날씨 헤더
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
@@ -277,7 +349,8 @@ private fun MonthlyRecordCard(
                     fontWeight = FontWeight.Normal
                 )
             }
-// 요일별 마음 날씨
+
+            // 요일별 마음 날씨
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween

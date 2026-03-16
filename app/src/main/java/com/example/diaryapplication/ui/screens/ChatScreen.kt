@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.diaryapplication.viewmodel.AuthViewModel
 import com.example.diaryapplication.ui.theme.ChatBubbleGray
 import com.example.diaryapplication.ui.theme.ChatInputGray
 import java.text.SimpleDateFormat
@@ -24,31 +26,43 @@ import java.util.Locale
 
 private enum class Sender { BOT, USER } // 메시지 발신자를 구분
 
+// 채팅 메시지 하나의 데이터 클래스
 private data class ChatMessage(
-    val id: Long,
-    val sender: Sender,
-    val text: String,
-    val time: String
+    val id: Long, // 메시지 고유 ID
+    val sender: Sender, // 발신자 (Bot 또는 사용자)
+    val text: String, // 메시지 내용
+    val time: String // 전송 시간
 )
 
+// 현재 시간을 HH:mm 형태로 변환하는 함수
 private fun nowTime() : String {
-    // 현재 시간을 HH:mm 형태로 변환
     return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
 }
 
+// 앱 시작시에 현재 시간을 한번 저장
 val now = nowTime()
 
+// 채팅 화면 함수 선언
 @Composable
-fun ChatScreen(padding: PaddingValues) {
-    var input by remember { mutableStateOf("") } // 텍스트 필드에 입력된 텍스트 상태 (입력시 값이 업데이트)
+fun ChatScreen(
+    padding: PaddingValues, // 여백값
+    authViewModel: AuthViewModel // DB에서 닉네임을 가져오기 위한 ViewModel
+) {
 
-    val messages = remember {
-        mutableStateListOf(
+    // DB에서 닉네임을 실시간으로 가져옴
+    val nickname by authViewModel.currentNickname.collectAsState()
+
+    // 텍스트 필드에 입력된 텍스트 상태 (입력시 값이 업데이트)
+    var input by remember { mutableStateOf("") }
+
+    // 채팅 메시지를 모아놓는 List
+    val messages = remember(nickname) {
+        mutableStateListOf( // 리스트에 메시지를 추가 및 삭제 시 화면에서 자동 업데이트를 위함
             ChatMessage(
-                id = 1,
+                id = 1, // 맨 처음은 봇의 환영 메시지
                 sender = Sender.BOT, // 발신자 -> 챗봇
-                text = "안녕하세요, 님! 😊\n오늘 하루는 어떠셨나요? 무엇이든 편하게 이야기해주세요.",
-                time = now
+                text = "안녕하세요, ${nickname ?: ""}님! 😊\n오늘 하루는 어떠셨나요?\n무엇이든 편하게 이야기해주세요.",
+                time = now // 메시지 전송 시간은 현재 시간
             )
         )
     }
@@ -60,22 +74,22 @@ fun ChatScreen(padding: PaddingValues) {
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        ChatHeaderCard(
+        ChatHeaderCard( // 상단에 챗봇 프로필 표시 부분
             title = "감정 챗봇",
             subtitle = "당신의 이야기를 들려주세요"
         )
 
         Spacer(Modifier.height(12.dp))
 
-        Surface(
+        Surface( // 메시지 목록 부분 -> 상단 프로필과 입력창을 제외한 나머지 모든 부분
             shape = RoundedCornerShape(18.dp),
             tonalElevation = 0.dp,
-            color = Color.Transparent,
+            color = Color.Transparent, // 투명색 배경
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .weight(1f) // 입력창을 제외한 나머지 모든 부분
         ) {
-            LazyColumn( // 메시지가 많을 경우, 보이는 것만 렌더링 -> 쉽게 말해 스크롤 할 수 있게
+            LazyColumn( // 메시지가 많을 경우, 보이는 것만 렌더링 -> 쉽게 말해 스크롤 할 수 있게 -> 성능 개선을 위함도 있다고 함
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp) // 메시지와 메시지 사이의 간격을 지정
@@ -226,9 +240,9 @@ private fun UserBubble(text: String, time: String) {
 // 디자인 부분(입력창 및 전송 버튼)
 @Composable
 private fun ChatInputBar(
-    value: String,
-    onValueChange: (String) -> Unit,
-    onSend: () -> Unit
+    value: String, // 현재 입력된 메시지
+    onValueChange: (String) -> Unit, // 타이핑할때마다 호출
+    onSend: () -> Unit // 전송 버튼 클릭 시 호출
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),

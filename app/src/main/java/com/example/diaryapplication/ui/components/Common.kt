@@ -51,7 +51,8 @@ fun SoftOutlinedTextField(
     containerColor: Color,
     trailing: @Composable (() -> Unit)? = null,
     readOnly: Boolean = false,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    isPassword : Boolean = false
 ) {
     OutlinedTextField(
         value = value,
@@ -60,6 +61,11 @@ fun SoftOutlinedTextField(
         placeholder = { Text(placeholder) },
         trailingIcon = trailing,
         singleLine = true,
+        visualTransformation = if (isPassword){
+            androidx.compose.ui.text.input.PasswordVisualTransformation()
+        } else {
+           androidx.compose.ui.text.input.VisualTransformation.None
+        },
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
             unfocusedContainerColor = containerColor,

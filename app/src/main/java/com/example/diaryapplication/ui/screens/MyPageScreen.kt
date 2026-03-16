@@ -24,8 +24,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.window.*
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.clickable
+import com.example.diaryapplication.viewmodel.MyPageViewModel
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.diaryapplication.viewmodel.AuthViewModel
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -33,28 +36,32 @@ import java.util.Locale
 @Composable
 fun MyPageScreen(
     padding: PaddingValues,
-    onLogout: () -> Unit = {} // 로그아웃 시 Login으로 보내는 nav는 여기서 처리
+    onLogout: () -> Unit = {}, // 로그아웃 시 Login으로 보내는 nav는 여기서 처리
+    myPageViewModel : MyPageViewModel = viewModel(),
+    authViewModel : AuthViewModel = viewModel()
 ) {
-    // 임시 데이터
-    var userName by remember { mutableStateOf("d") }
-    var nickname by remember { mutableStateOf("d") }
-    val email = "d@naver.com"
-    var birthDate by remember { mutableStateOf(LocalDate.of(2026, 3, 3)) }
 
-    // 알림 설정
-    var notificationEnabled by remember { mutableStateOf(false) } // 기본 디폴트는 OFF
-    var notifyTime by remember { mutableStateOf(LocalTime.of(21, 0)) } // 기본 디폴트는 오후 9시
+    // 사용자 프로필 정보
+    val userProfile by myPageViewModel.userProfile.collectAsState()
+    val notificationEnabled by myPageViewModel.notificationEnabled.collectAsState()
+    val notifyTime by myPageViewModel.notifyTime.collectAsState()
+    val pinEnabled by myPageViewModel.pinEnabled.collectAsState()
+    val totalDiary by myPageViewModel.totalDiaryCount.collectAsState()
+    val thisMonthDiary by myPageViewModel.thisMonthDiaryCount.collectAsState()
 
-    // PIN 설정
-    var pinEnabled by remember { mutableStateOf(false) } // 기본 디폴트 OFF
-    var savedPin by remember { mutableStateOf<String?>(null) } // PIN 미설정
+    val userName = userProfile.name
+    val nickname = userProfile.nickname
+    val email = userProfile.email
+    val birthDate = if (userProfile.birthDate.isNotEmpty()) {
+        LocalDate.parse(userProfile.birthDate)
+    } else {
+        LocalDate.now()
+    }
+
     var showProfileDialog by remember { mutableStateOf(false) }
     var showTimeDialog by remember { mutableStateOf(false) }
     var showPinDialog by remember { mutableStateOf(false) }
 
-    // 활동 요약
-    val totalDiary = 0
-    val thisMonthDiary = 0
     val cardGap = 14.dp
     val sectionGap = 18.dp
 
@@ -102,7 +109,7 @@ fun MyPageScreen(
                             if (checked) {
                                 showTimeDialog = true
                             } else {
-                                notificationEnabled = false
+                                myPageViewModel.disableNotification()
                             }
                         }
                     )
@@ -119,8 +126,7 @@ fun MyPageScreen(
                             if (checked) {
                                 showPinDialog = true
                             } else {
-                                pinEnabled = false
-                                savedPin = null
+                                myPageViewModel.deletePin()
                             }
                         }
                     )
@@ -167,10 +173,10 @@ fun MyPageScreen(
             birthDate = birthDate, // 현재 생년월일
             onDismiss = { showProfileDialog = false }, // 닫기
             onSave = { newName, newNick, newBirth ->
-                userName = newName
-                nickname = newNick
-                birthDate = newBirth
-                showProfileDialog = false
+                myPageViewModel.saveProfile(newName, newNick, newBirth) {
+                    authViewModel.currentNickname.value = newNick // 홈/챗봇에 반영될 수 있게 하기 위함
+                    showProfileDialog = false
+                }
             } // 저장하기
         )
     }
@@ -182,12 +188,11 @@ fun MyPageScreen(
             onDismiss = {
                 // 시간이 선택되지 않고 닫으면 알림 설정 OFF
                 showTimeDialog = false
-                notificationEnabled = false
+
             },
             onSave = { time ->
-                notifyTime = time
-                notificationEnabled = true
-                showTimeDialog = false
+                myPageViewModel.saveNotificationSetting(true, time)
+                showTimeDialog = false // 창 닫기
             } // 새로운 시간 설정
         )
     }
@@ -197,11 +202,9 @@ fun MyPageScreen(
         PinSetupDialog(
             onDismiss = {
                 showPinDialog = false
-                pinEnabled = false
             },
             onSave = { pin ->
-                savedPin = pin
-                pinEnabled = true
+                myPageViewModel.savePin(pin)
                 showPinDialog = false
             }
         )
@@ -634,12 +637,15 @@ private fun SoftField(
         modifier = Modifier.fillMaxWidth()
     )
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BirthDateField(
     value: LocalDate,
     onChange: (LocalDate) -> Unit
 ) {
     val formatted = remember(value) { value.toString() }
+    var showPicker by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -647,12 +653,38 @@ private fun BirthDateField(
             .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+            .clickable { showPicker = true }
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(formatted)
         Icon(Icons.Outlined.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+
+    if (showPicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = value.toEpochDay() * 86400000L
+        )
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?. let {millis ->
+                        val picked = java.time.Instant.ofEpochMilli(millis)
+                            .atZone(java.time.ZoneId.of("UTC"))
+                            .toLocalDate()
+                        onChange(picked)
+                    }
+                    showPicker = false
+                }) { Text ("확인")}
+            },
+            dismissButton =  {
+                TextButton(onClick = { showPicker = false}) { Text("취소") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
     }
 }
 @Composable

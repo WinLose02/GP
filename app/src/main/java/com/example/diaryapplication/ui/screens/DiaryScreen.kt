@@ -29,6 +29,8 @@ import com.example.diaryapplication.ui.components.PrimaryPillButton
 import com.example.diaryapplication.ui.components.RoundedCard
 import com.example.diaryapplication.ui.components.SoftOutlinedTextField
 import com.example.diaryapplication.ui.theme.AppFieldColor
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.diaryapplication.viewmodel.DiaryViewModel
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -43,20 +45,20 @@ private enum class WeatherType(val label: String, val icon: @Composable () -> Un
     SNOW("눈", { Icon(Icons.Outlined.AcUnit, contentDescription = null) }),
 }
 @Composable
-fun DiaryScreen(padding: PaddingValues) {
+fun DiaryScreen(
+    padding: PaddingValues, // 여백값
+    diaryViewModel: DiaryViewModel = viewModel() // DB 통신을 위한 ViewModel
+) {
     val today = remember { LocalDate.now() } // 오늘 날짜
     val yesterday = remember { LocalDate.now().minusDays(1) } // 어제 날짜
     var selectedDate by remember { mutableStateOf(today) } // 캘린더에서 선택된 날짜(디폴트: 오늘)
     var month by remember { mutableStateOf(YearMonth.from(selectedDate)) } // 현재 달
-// 날짜 별 감정 이모티콘
-// TODO: 여기에 감정 요약한 것을 이모티콘 붙이기
-    val emotionEmojiByDate = remember {
-        mutableStateMapOf(
-            today to "😊",
-            yesterday to "😢",
-        )
-    }
-// 입력 상태
+
+    val isLoading by diaryViewModel.isLoading.collectAsState()
+    val currentDiary by diaryViewModel.currentDiary.collectAsState()
+    val emotionEmojiMap by diaryViewModel.emotionEmojiMap.collectAsState()
+
+    // 입력 상태
     var diaryText by remember { mutableStateOf("") } // 일기 내용
     var routineText by remember { mutableStateOf("") } // 하루 일과
     var bestThing by remember { mutableStateOf("") } // 가장 좋았던 일
@@ -64,179 +66,237 @@ fun DiaryScreen(padding: PaddingValues) {
     var weather by remember { mutableStateOf(WeatherType.SUNNY) } // 선택된 날씨 (디폴트: 맑음)
     var exerciseMin by remember { mutableIntStateOf(0) } // 운동 시간
     var studyMin by remember { mutableIntStateOf(0) } // 공부 시간
-// 사진 선택
+
+    LaunchedEffect(month) { // 달이 바뀔 때마다 해당 달의 감정 이모지를 DB에서 가져옴
+        diaryViewModel.loadMonthEmojis(month.year, month.monthValue)
+    }
+    LaunchedEffect(selectedDate) { // selectedDate가 바뀔때마다 해당 날짜의 일기를 불러옴
+        diaryViewModel.loadDiary(selectedDate)
+    }
+    LaunchedEffect(currentDiary) { // currentDiary가 바뀔 때마다 값을 업데이트
+        val diary = currentDiary
+        if (diary != null) { // 일기가 있으면 기존 내용으로 필드를 채우기
+            diaryText = diary.content
+            routineText = diary.routine
+            bestThing = diary.bestThing
+            regretThing = diary.regretThing
+            exerciseMin = diary.exerciseMin
+            studyMin = diary.studyMin
+            weather = WeatherType.entries.find { it.name == diary.weather } ?: WeatherType.SUNNY
+        } else { // 일기가 없으면 모든 필드를 공백으로 초기화
+            diaryText = ""
+            routineText = ""
+            bestThing = ""
+            regretThing = ""
+            exerciseMin = 0
+            studyMin = 0
+            weather = WeatherType.SUNNY
+        }
+    }
+
+    // 일기 저장 시에, 스낵바 메시지를 표시하기 위함
+    val snackbarHostState = remember { SnackbarHostState() }
+    val isSaveSuccess by diaryViewModel.isSaveSuccess.collectAsState() // 일기가 저장되었는지 여부 -> True, False
+    LaunchedEffect(isSaveSuccess) { // 일기가 저장 되었으면
+        if (isSaveSuccess) snackbarHostState.showSnackbar("일기가 저장되었습니다 ✅") // 스낵바 메시지 출력
+    }
+
+    // 사진 선택
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) } // 선택된 사진의 경로 (null이면 사진 X)
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri -> selectedImageUri = uri } // 사진 선택 완료 시, 사진의 URI 저장
     )
-    Column(
-        modifier = Modifier
-            .padding(padding)
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-// 페이지 타이틀
-        Text(
-            text = "📔 일기",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
-// 날짜 선택
-        RoundedCard(modifier = Modifier.fillMaxWidth()) {
-            CalendarHeader(
-                yearMonth = month,
-                onPrev = { month = month.minusMonths(1) }, // < 버튼 클릭 시, 이전 달로
-                onNext = { month = month.plusMonths(1) } // > 버튼 클릭 시, 다음 달로
-            )
-            Spacer(Modifier.height(10.dp))
-            CalendarGrid(
-                yearMonth = month,
-                selectedDate = selectedDate,
-                today = today,
-                yesterday = yesterday,
-                emotionEmojiByDate = emotionEmojiByDate,
-                onSelect = { picked -> selectedDate = picked }
-            )
-            Spacer(Modifier.height(10.dp))
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { _ ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 페이지 타이틀
             Text(
-                text = formatKoreanDate(selectedDate), // 2026년 3월 1일 (일요일) 형태
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center // 가운데 정렬
+                text = "📔 일기",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(vertical = 8.dp)
             )
-        }
-// 안내 배너
-        InfoBanner(text = "💡 날짜를 선택하면 해당 날의 일기를 작성하거나 확인할 수 있어요")
-// 입력 폼
-        RoundedCard(modifier = Modifier.fillMaxWidth()) {
-// 선택된 날짜 표시
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Outlined.Edit,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = formatKoreanDate(selectedDate),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(Modifier.height(14.dp))
-// 일기 텍스트
-            Text("오늘의 일기 *", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = diaryText,
-                onValueChange = { diaryText = it },
-                placeholder = { Text("오늘 하루 어떠셨나요?") },
-                minLines = 4,
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = AppFieldColor,
-                    focusedContainerColor = AppFieldColor,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    cursorColor = MaterialTheme.colorScheme.primary
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-// 사진 추가
-            Spacer(Modifier.height(14.dp))
-            Text("사진", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
-            if (selectedImageUri != null) { // 사진이 선택 되었다면
-                AsyncImage( // 미리 보기로 표시
-                    model = selectedImageUri, // 사진
-                    contentDescription = "선택한 사진",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .background(AppFieldColor, RoundedCornerShape(16.dp))
+            // 날짜 선택
+            RoundedCard(modifier = Modifier.fillMaxWidth()) {
+                CalendarHeader(
+                    yearMonth = month,
+                    onPrev = { month = month.minusMonths(1) }, // < 버튼 클릭 시, 이전 달로
+                    onNext = { month = month.plusMonths(1) } // > 버튼 클릭 시, 다음 달로
                 )
                 Spacer(Modifier.height(10.dp))
+                CalendarGrid(
+                    yearMonth = month,
+                    selectedDate = selectedDate,
+                    today = today,
+                    yesterday = yesterday,
+                    emotionEmojiByDate = emotionEmojiMap,
+                    onSelect = { picked -> selectedDate = picked }
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = formatKoreanDate(selectedDate), // 2026년 3월 1일 (일요일) 형태
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center // 가운데 정렬
+                )
             }
-            OutlinedButton(
-                onClick = {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            // 안내 배너
+            InfoBanner(text = "💡 날짜를 선택하면 해당 날의 일기를 작성하거나 확인할 수 있어요")
+
+            // 입력 폼
+            RoundedCard(modifier = Modifier.fillMaxWidth()) {
+
+                // 선택된 날짜 표시
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.Edit,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = formatKoreanDate(selectedDate),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+
+                // 일기 텍스트
+                Text("오늘의 일기 *", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = diaryText,
+                    onValueChange = { diaryText = it },
+                    placeholder = { Text("오늘 하루 어떠셨나요?") },
+                    minLines = 4,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = AppFieldColor,
+                        focusedContainerColor = AppFieldColor,
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        cursorColor = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // 사진 추가
+                Spacer(Modifier.height(14.dp))
+                Text("사진", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(8.dp))
+                if (selectedImageUri != null) { // 사진이 선택 되었다면
+                    AsyncImage( // 미리 보기로 표시
+                        model = selectedImageUri, // 사진
+                        contentDescription = "선택한 사진",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .background(AppFieldColor, RoundedCornerShape(16.dp))
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+                OutlinedButton(
+                    onClick = {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().height(54.dp)
+                ) {
+                    Icon(Icons.Outlined.CameraAlt, contentDescription = null)
+                    Spacer(Modifier.width(10.dp))
+
+                    // 사진이 선택이 되면 다시 선택하기, 아니면 사진 추가하기
+                    Text(if (selectedImageUri == null) "사진 추가하기" else "사진 다시 선택하기")
+                }
+            }
+
+            // 날씨, 운동 및 공부 시간 컨트롤, 일과 필드
+            RoundedCard(modifier = Modifier.fillMaxWidth()) {
+                Text("날씨", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(10.dp))
+
+                // 날씨 선택 버튼 및 선택된 날씨로 변수에 저장
+                WeatherRow(selected = weather, onSelect = { weather = it })
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    DurationPickerField(
+                        title = "운동시간",
+                        totalMinutes = exerciseMin,
+                        onPick = { exerciseMin = it }, // 선택 완료 시, 값 업데이트
+                        modifier = Modifier.weight(1f), // ROW의 절반을 차지
+                        minMinutes = 0, // 최소: 0분
+                        maxMinutes = 1440, // 최대: 1440분(24시간)
+                        minuteStep = 10 // 10분 단위로 컨트롤
+                    )
+                    DurationPickerField(
+                        title = "공부시간",
+                        totalMinutes = studyMin,
+                        onPick = { studyMin = it }, // 선택 완료 시, 값 업데이트
+                        modifier = Modifier.weight(1f), // ROW의 절반을 차지
+                        minMinutes = 0, // 최소 : 0분
+                        maxMinutes = 1440, // 최대 : 1440분(24시간)
+                        minuteStep = 10 // 10분 단위로 컨트롤
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                Text("하루 일과", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(8.dp))
+                SoftOutlinedTextField(
+                    value = routineText, // 입력된 일과 텍스트
+                    onValueChange = { routineText = it }, // 입력 시, 데이터 업데이트
+                    placeholder = "오늘 무엇을 하셨나요?", // 힌트 메시지
+                    containerColor = AppFieldColor // 배경 색 - 연한 회색
+                )
+            }
+
+            // 일기 작성 도우미 필드
+            HelperCard(
+                bestThing = bestThing, // 가장 좋았던 일 텍스트
+                onBestChange = { bestThing = it }, // 입력 시, 데이터 업데이트
+                regretThing = regretThing, // 가장 아쉬웠던 일 텍스트
+                onRegretChange = { regretThing = it } // 입력 시, 데이터 업데이트
+            )
+
+            // 저장하기
+            PrimaryPillButton(
+                text = if (isLoading) "저장 중 . . . " else "일기 저장하기",
+                onClick = { // TODO:  AI 감정 분석 + DB 저장
+                    diaryViewModel.saveDiary(
+                        date = selectedDate,
+                        content = diaryText,
+                        weather = weather.name,
+                        exerciseMin = exerciseMin,
+                        studyMin = studyMin,
+                        routine = routineText,
+                        bestThing = bestThing,
+                        regretThing = regretThing,
+                        onSuccess = {}
                     )
                 },
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().height(54.dp)
-            ) {
-                Icon(Icons.Outlined.CameraAlt, contentDescription = null)
-                Spacer(Modifier.width(10.dp))
-// 사진이 선택이 되면 다시 선택하기, 아니면 사진 추가하기
-                Text(if (selectedImageUri == null) "사진 추가하기" else "사진 다시 선택하기")
-            }
-        }
-// 날씨, 운동 및 공부 시간 컨트롤, 일과 필드
-        RoundedCard(modifier = Modifier.fillMaxWidth()) {
-            Text("날씨", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(10.dp))
-// 날씨 선택 버튼 및 선택된 날씨로 변수에 저장
-            WeatherRow(selected = weather, onSelect = { weather = it })
-            Spacer(Modifier.height(14.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                DurationPickerField(
-                    title = "운동시간",
-                    totalMinutes = exerciseMin,
-                    onPick = { exerciseMin = it }, // 선택 완료 시, 값 업데이트
-                    modifier = Modifier.weight(1f), // ROW의 절반을 차지
-                    minMinutes = 0, // 최소: 0분
-                    maxMinutes = 1440, // 최대: 1440분(24시간)
-                    minuteStep = 10 // 10분 단위로 컨트롤
-                )
-                DurationPickerField(
-                    title = "공부시간",
-                    totalMinutes = studyMin,
-                    onPick = { studyMin = it }, // 선택 완료 시, 값 업데이트
-                    modifier = Modifier.weight(1f), // ROW의 절반을 차지
-                    minMinutes = 0, // 최소 : 0분
-                    maxMinutes = 1440, // 최대 : 1440분(24시간)
-                    minuteStep = 10 // 10분 단위로 컨트롤
-                )
-            }
-            Spacer(Modifier.height(14.dp))
-            Text("하루 일과", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
-            SoftOutlinedTextField(
-                value = routineText, // 입력된 일과 텍스트
-                onValueChange = { routineText = it }, // 입력 시, 데이터 업데이트
-                placeholder = "오늘 무엇을 하셨나요?", // 힌트 메시지
-                containerColor = AppFieldColor // 배경 색 - 연한 회색
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
             )
         }
-// 일기 작성 도우미 필드
-        HelperCard(
-            bestThing = bestThing, // 가장 좋았던 일 텍스트
-            onBestChange = { bestThing = it }, // 입력 시, 데이터 업데이트
-            regretThing = regretThing, // 가장 아쉬웠던 일 텍스트
-            onRegretChange = { regretThing = it } // 입력 시, 데이터 업데이트
-        )
-// 저장하기
-        PrimaryPillButton(
-            text = "일기 저장하기",
-            onClick = {
-// TODO: ViewModel 연동 후 AI 감정 분석 + DB 저장
-// emotionEmojiByDate[selectedDate] = "__" 형태로 업데이트 및 저장
-            },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-        )
     }
 }
-// ── 안내 배너 ──────────────────────────────────────────────────
+// 안내 배너
 @Composable
 private fun InfoBanner(text: String) {
     Surface(
@@ -252,7 +312,7 @@ private fun InfoBanner(text: String) {
         )
     }
 }
-// ── 달력 헤더 ──────────────────────────────────────────────────
+// 달력 배너
 @Composable
 private fun CalendarHeader(yearMonth: YearMonth, onPrev: () -> Unit, onNext: () -> Unit) {
     Row(
@@ -265,7 +325,7 @@ private fun CalendarHeader(yearMonth: YearMonth, onPrev: () -> Unit, onNext: () 
         IconButton(onClick = onNext) { Icon(Icons.Outlined.ChevronRight, contentDescription = null) }
     }
 }
-// ── 달력 그리드 ────────────────────────────────────────────────
+// 달력 그리드
 @Composable
 private fun CalendarGrid(
     yearMonth: YearMonth,
@@ -296,7 +356,7 @@ private fun CalendarGrid(
                 for (col in 0 until 7) {
                     val dayNumber = week * 7 + col - firstDowIndex + 1
                     val date = if (dayNumber in 1..daysInMonth) yearMonth.atDay(dayNumber) else null
-                    val enabled = date != null && date <= today
+                    val enabled = date != null && (date == today || date == yesterday)
                     CalendarCell(
                         date = date,
                         isSelected = date == selectedDate,
@@ -310,7 +370,7 @@ private fun CalendarGrid(
         }
     }
 }
-// ── 달력 셀 ────────────────────────────────────────────────────
+// 달력 셀
 @Composable
 private fun CalendarCell(
     date: LocalDate?,
@@ -342,7 +402,7 @@ private fun CalendarCell(
         }
     }
 }
-// ── 날씨 선택 ──────────────────────────────────────────────────
+// 날씨 선택
 @Composable
 private fun WeatherRow(selected: WeatherType, onSelect: (WeatherType) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -371,7 +431,7 @@ private fun WeatherRow(selected: WeatherType, onSelect: (WeatherType) -> Unit) {
         }
     }
 }
-// ── 일기 작성 도우미 ───────────────────────────────────────────
+// 일기 작성 도우미
 @Composable
 private fun HelperCard(
     bestThing: String, onBestChange: (String) -> Unit,
@@ -480,16 +540,18 @@ private fun HourMinutePickerSheet(
     val maxHour = maxMinutes / 60 // 최대 시간 계산
     val hourValues = remember(maxHour) { (0..maxHour).toList() } // [0,1,2,3,..,24]시간
     val minuteValues = remember(minuteStep) {
-// 10분 단위: 0, 10, 20, 30, 40, 50
+        // 10분 단위: 0, 10, 20, 30, 40, 50
         (0..59 step minuteStep).toList()
     }
-// 초기값을 Step에 맞춰 정리
+    // 초기값을 Step에 맞춰 정리
     val initClamped = initialTotalMinutes.coerceIn(minMinutes, maxMinutes) // 초기 값을 0분 ~ 1440분(24시간) 내로 조정
     val initHour = (initClamped / 60).coerceIn(0, maxHour) // 조정한 값을 시간 단위로 변환
     val initMin = (initClamped % 60 / minuteStep) * minuteStep // 나머지 값을 활용해서 분 단위 값을 계산
-// 현재 선택된 시간의 인덱스 ({} 안에 있는 부분이 계산한 시간 단위 값의 인덱스를 반환)
+
+    // 현재 선택된 시간의 인덱스 ({} 안에 있는 부분이 계산한 시간 단위 값의 인덱스를 반환)
     var hourIndex by remember { mutableIntStateOf(hourValues.indexOf(initHour).coerceAtLeast(0)) }
-// 현재 선택된 시간(분)의 인덱스 ({} 안에 있는 부분이 계산한 분 단위 값의 인덱스를 반환)
+
+    // 현재 선택된 시간(분)의 인덱스 ({} 안에 있는 부분이 계산한 분 단위 값의 인덱스를 반환)
     var minuteIndex by remember { mutableIntStateOf(minuteValues.indexOf(initMin).coerceAtLeast(0)) }
     ModalBottomSheet(
         onDismissRequest = onDismiss, // 바깥 터치 시, onDismiss 호출
@@ -511,7 +573,7 @@ private fun HourMinutePickerSheet(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-// 시간 휠(다이얼)
+                // 시간 휠(다이얼)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("시간", style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.height(8.dp))
@@ -535,7 +597,7 @@ private fun HourMinutePickerSheet(
                         }
                     )
                 }
-// 분 단위 휠(다이얼)
+                // 분 단위 휠(다이얼)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("분", style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.height(8.dp))
@@ -547,8 +609,9 @@ private fun HourMinutePickerSheet(
                             NumberPicker(ctx).apply {
                                 minValue = 0
                                 maxValue = minuteValues.lastIndex
-// 분의 값을 두자리 형태로 고정
-// 0분 -> 00분, 5분 -> 05분, 30분 -> 30분 형태로 맞춤
+
+                                // 분의 값을 두자리 형태로 고정
+                                // 0분 -> 00분, 5분 -> 05분, 30분 -> 30분 형태로 맞춤
                                 displayedValues = minuteValues.map { it.toString().padStart(2, '0') }.toTypedArray()
                                 value = minuteIndex
                                 wrapSelectorWheel = false
@@ -564,8 +627,8 @@ private fun HourMinutePickerSheet(
                     )
                 }
             }
-// 현재 선택된 시 단위의 값과 분 단위의 값을 0시간 0분 형태로 계산
-// 그 후에, 범위 내의 값으로 조정(맞춰줌)
+            // 현재 선택된 시 단위의 값과 분 단위의 값을 0시간 0분 형태로 계산
+            // 그 후에, 범위 내의 값으로 조정(맞춰줌)
             val clampedPreview = (hourValues[hourIndex] * 60 + minuteValues[minuteIndex])
                 .coerceIn(minMinutes, maxMinutes)
             Text(
@@ -591,6 +654,7 @@ private fun HourMinutePickerSheet(
         }
     }
 }
+
 // 그 외의 유틸리티 함수들
 private fun formatDuration(totalMinutes: Int): String {
     val m = max(0, totalMinutes)

@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.diaryapplication.viewmodel.ReportViewModel
 import kotlin.math.max
 import kotlin.math.roundToInt
 import java.time.LocalDate
@@ -30,21 +32,51 @@ import java.time.DayOfWeek
 import java.time.temporal.TemporalAdjusters
 
 @Composable
-fun ReportScreen(padding: PaddingValues) {
+fun ReportScreen(
+    padding: PaddingValues,
+    reportViewModel: ReportViewModel = viewModel() // DB와 통신하기 위한 ViewModel
+) {
     var tab by remember { mutableStateOf(0) } // 0: 주간, 1: 월간
-    val isWeekly = tab == 0
+    val isWeekly = tab == 0 // 현재 주간 탭이면 True
+
+    // 히스토그램 X축 라벨
+    // 주간 -> 요일, 월간 -> 주차
     val weeklyLabels = listOf("일", "월", "화", "수", "목", "금", "토")
     val monthlyWeekLabels = listOf("1주", "2주", "3주", "4주", "5주")
     
-    // 주간 임시 데이터 -> 0 (기록 없음)
-    val weeklyStudy = List(7) { 0 }
-    val weeklyExercise = List(7) { 0 }
+    // 주간 데이터를 실시간을 받아옴
+    val weeklyStudy by reportViewModel.weeklyStudy.collectAsState()
+    val weeklyExercise by reportViewModel.weeklyExercise.collectAsState()
 
-    // 월간 임시 데이터 -> 0 (기록 없음)
-    val monthlyStudyDaily = List(30) { 0 }
-    val monthlyExerciseDaily = List(30) { 0 }
-    
+    // 월간 데이터를 실시간으로 받아옴
+    val monthlyStudyDaily by reportViewModel.monthlyStudyDaily.collectAsState()
+    val monthlyExerciseDaily by reportViewModel.monthlyExerciseDaily.collectAsState()
+
+    // (주간) 운동 및 공부 시간 합계/통계 값 계산
+    val weeklyDiaryCount by reportViewModel.weeklyDiaryCount.collectAsState()
+    val weeklyAvgExercise by reportViewModel.weeklyAvgExercise.collectAsState()
+    val weeklyTotalExcercise by reportViewModel.weeklyTotalExercise.collectAsState()
+    val weeklyTotalStudy by reportViewModel.weeklyTotalStudy.collectAsState()
+
+    // (월간) 운동 및 공부 시간 합계/통계 값 계산
+    val monthlyDiaryCount by reportViewModel.monthlyDiaryCount.collectAsState()
+    val monthlyAvgExercise by reportViewModel.monthlyAvgExercise.collectAsState()
+    val monthlyTotalExercise by reportViewModel.monthlyTotalExercise.collectAsState()
+    val monthlyTotalStudy by reportViewModel.monthlyTotalStudy.collectAsState()
+
+    // TODO: AI 일기 요약 파트 (추후에 연동 작업)
+    val weeklyAiSummary by reportViewModel.weeklyAiSummary.collectAsState()
+    val monthlyAiSummary by reportViewModel.weeklyAiSummary.collectAsState()
+
+    // 선택된 탭에 따라 주간 또는 월간 데이터 중 하나를 선택
+    val diaryCount = if (isWeekly) weeklyDiaryCount else monthlyDiaryCount
+    val avgExerciseMin = if (isWeekly) weeklyAvgExercise else monthlyAvgExercise
+    val totalExerciseMin = if (isWeekly) weeklyTotalExcercise else monthlyTotalExercise
+    val totalStudyMin = if (isWeekly) weeklyTotalStudy else monthlyTotalStudy
+    val aiSummaryText = if (isWeekly) weeklyAiSummary else monthlyAiSummary
+
     // 월간을 주차 단위로 묶기
+    // remember -> 데이터가 변경될 때만 재계산을 위함
     val (monthlyStudyWeekly, monthlyExerciseWeekly) = remember(monthlyStudyDaily, monthlyExerciseDaily) {
         aggregateToWeeks(monthlyStudyDaily, monthlyExerciseDaily)
     }
@@ -53,6 +85,10 @@ fun ReportScreen(padding: PaddingValues) {
     
     // 오늘 날짜 기준으로 자동 계산
     val today = remember { LocalDate.now() }
+
+    // 기간 범위 텍스트 계산
+    // EX> 월요일 ~ 일요일
+    // EX> 3월 3일 ~ 9일
     val periodRange = remember(isWeekly, today) {
         if (isWeekly) {
             
@@ -73,14 +109,7 @@ fun ReportScreen(padding: PaddingValues) {
             "${monthStart.monthValue}월 ${monthStart.dayOfMonth}일 - ${monthEnd.dayOfMonth}일"
         }
     }
-    
-    val diaryCount = 0 // 일기 개수
-    val avgExerciseMin = 0 // 평균 운동 시간
-    val totalExerciseMin = 0 // 총 운동 시간
-    val totalStudyMin = 0 // 총 공부 시간
-    
-    // OpenAI 요약 내용이 이곳에 들어가기
-    val aiSummaryText: String? = null
+
     
     
     // 요약 페이지 디자인 부분
@@ -91,28 +120,28 @@ fun ReportScreen(padding: PaddingValues) {
             .background(MaterialTheme.colorScheme.background)
     ) {
         ReportHeader()
-        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-        androidx.compose.foundation.lazy.LazyColumn(
+        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)) // 구분선
+        androidx.compose.foundation.lazy.LazyColumn( // 스크롤을 가능하게
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                CheckSegmentedTabs(
+                CheckSegmentedTabs( // 주간/월간 탭
                     selectedIndex = tab,
                     onSelect = { tab = it },
                     left = "주간",
                     right = "월간"
                 )
             }
-            item { PeriodCard(title = periodTitle, range = periodRange) }
+            item { PeriodCard(title = periodTitle, range = periodRange) } // 기간을 나타내는 카드
             item {
-                EmotionSummaryCard(
+                EmotionSummaryCard( // 감정 요약 카드
                     title = "$periodTitle 나의 감정",
                     emptyText = "아직 감정 기록이 없습니다"
                 )
             }
-            item {
+            item { // 일기 수, 평균 운동 데이터 카드
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     KpiCard(
                         modifier = Modifier.weight(1f),
@@ -124,23 +153,23 @@ fun ReportScreen(padding: PaddingValues) {
                         modifier = Modifier.weight(1f),
                         icon = Icons.Outlined.SportsGymnastics,
                         title = "평균 운동",
-                        value = "${avgExerciseMin}분"
+                        value = "${formatMinutes(avgExerciseMin)}"
                     )
                 }
             }
-            item {
+            item { // 총 운동 시간, 총 공부 시간 카드
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     KpiCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Outlined.SportsGymnastics,
                         title = "총 운동시간",
-                        value = "${totalExerciseMin}분"
+                        value = "${formatMinutes(totalExerciseMin)}"
                     )
                     KpiCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Outlined.School,
                         title = "총 공부시간",
-                        value = "${totalStudyMin}분"
+                        value = "${formatMinutes(totalStudyMin)}"
                     )
                 }
             }
@@ -168,6 +197,7 @@ fun ReportScreen(padding: PaddingValues) {
 }
 
 // 월간을 주간 단위로 묶기 함수
+// 반환 -> 공부 주차 리스트, 운동 주차 리스트를 Pair(쌍)으로 반환
 private fun aggregateToWeeks(studyDaily: List<Int>, exerciseDaily: List<Int>): Pair<List<Int>, List<Int>> {
     fun chunkSum(list: List<Int>, start: Int, endInclusive: Int): Int {
         var s = 0
@@ -327,7 +357,7 @@ private fun KpiCard(
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = modifier
-            .height(118.dp)
+            .heightIn(120.dp)
             .background(
                 brush = Brush.linearGradient(listOf(start, end)),
                 shape = RoundedCornerShape(18.dp)
@@ -398,36 +428,80 @@ private fun HistogramWithHighlightTooltip(
     isWeekly: Boolean,
     modifier: Modifier = Modifier
 ) {
+    // 전체 데이터 중 가장 큰 값을 계산
+    /*
+        [Example]
+        study = [30, 60, 0, 45, 90, 20, 10]
+        exercise = [20, 40, 30, 0, 60, 15, 5]
+        study + exercise = [30, 60, 0, 45, 90, 20, 10, 20, 40, 30, 0, 60, 15, 5]
+        .maxOrNull() = 90 => maxValue = 90
+
+        이 값을 이용해 막대의 높이 비율을 계싼
+        max(1,..)을 통해 0이 되는 것을 방지하기 위함
+     */
     val maxValue = max(1, (study + exercise).maxOrNull() ?: 1)
+
     val axisColor = Color(0xFF2F343A)
     val gridColor = Color(0xFFE7EBF0)
-    val dash = remember { PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f) }
+
+    // 히스토그램의 디자인적인 요소들
+    val dash = remember { PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f) } // 점선 효과를 정의
+
     val highlightColor = Color(0xFFBDBDBD).copy(alpha = 0.55f)
     val exerciseColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
     val studyColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.60f)
-    var selectedIndex by remember { mutableStateOf<Int?>(null) }
-    var tooltipAnchor by remember { mutableStateOf(Offset.Zero) }
-    var highlightRect by remember { mutableStateOf<Rect?>(null) }
+
+    var selectedIndex by remember { mutableStateOf<Int?>(null) } // 터치된 막대의 인덱스
+    var tooltipAnchor by remember { mutableStateOf(Offset.Zero) } // 툴팁이 표시될 위치의 좌표
+    var highlightRect by remember { mutableStateOf<Rect?>(null) } // 강조 표시할 사각형의 영역
+
     Box(modifier = modifier) {
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(labels, study, exercise) {
-                    detectTapGestures { tap ->
+                .pointerInput(labels, study, exercise) { // 터치 입력 처리를 위함
+                    detectTapGestures { tap -> // 탭 터치를 감지
+
+                        // 1. Canvas의 전체 너비 및 높이를 정의
                         val w = size.width
                         val h = size.height
+
+                        // 2. 차트의 여백을 설정
                         val topPad = 10f
-                        val bottomPad = 34f
+                        val bottomPad = 48f
                         val leftPad = 34f
                         val rightPad = 8f
+
+                        // 실제 차트가 그려지는 너비와 높이를 계산
+                        // EX> 전체 너비를 400px라고 하면, chartW = 400 - 34 - 8 = 358px
                         val chartW = w - leftPad - rightPad
                         val chartH = h - topPad - bottomPad
+
+                        // X축 레이블의 개수
                         val count = labels.size
+
+                        // 각 막대의 중심 X좌표 계산 함수
+                        // step -> 각 레이블 하나가 차지하는 너비
+                        // step = 차트의 전체 길이 / X축 라벨의 개수 = 차지하는 너비
+
+                        /*
+                            [Example]
+                            chartW = 350px, count=7(주간)
+                            step = 350 / 7 = 50px
+                            --> 요일 한 칸당 50px씩 차지!
+                         */
                         val step = chartW / count
+
+                        // i번째 막대의 중심 X좌표를 계산
+                        // i=0(일요일) -> center(0) = 34 + 50*0 + 25 = 59px
+                        // i=1(월요일) -> center(1) = 34 + 50*1 + 25 = 109px
                         val centerX = { i: Int -> leftPad + step * i + step / 2f }
-                        val highlightW = step * 0.60f
-                        var hit: Int? = null
-                        for (i in 0 until count) {
+
+                        // 터치 위치가 어떤 막대 위에 있는지 판단
+                        val highlightW = step * 0.60f // 터치를 감지하는 사각형의 너비 (step의 60%)
+                        var hit: Int? = null // 터치된 막대의 인덱스를 저장
+
+                        for (i in 0 until count) { // 터치 감지를 위한 사각형 영역을 생성
                             val cx = centerX(i)
                             val rect = Rect(
                                 left = cx - highlightW / 2f,
@@ -435,41 +509,51 @@ private fun HistogramWithHighlightTooltip(
                                 right = cx + highlightW / 2f,
                                 bottom = topPad + chartH
                             )
-                            if (rect.contains(tap)) { hit = i; break }
+                            if (rect.contains(tap)) { hit = i; break } // 만약 터치 위치가 사각형 안에 있으면 True
                         }
+
+                        // 막대를 터치하면 강조 및 툴팁을 표시
                         if (hit != null) {
-                            selectedIndex = hit
-                            val cx = centerX(hit)
-                            tooltipAnchor = Offset(cx, topPad + chartH * 0.35f)
-                            highlightRect = Rect(
+                            selectedIndex = hit // 터치된 해당 막대의 인덱스를 저장
+
+                            // 툴팁을 표시할 위치를 계산
+                            val cx = centerX(hit) // 터치한 막대의 중심 X좌표
+                            tooltipAnchor = Offset(cx, topPad + chartH * 0.35f) // Y는 차트 높이의 35% 지점
+                            highlightRect = Rect( // 강조될 사각형의 영역을 저장 -> 터치된 막대의 전체 높이만큼
                                 left = cx - highlightW / 2f,
                                 top = topPad,
                                 right = cx + highlightW / 2f,
                                 bottom = topPad + chartH
                             )
-                        } else {
+                        } else { // 빈 곳을 터치하면 해제
                             selectedIndex = null
                             highlightRect = null
                         }
                     }
                 }
-        ) {
+        ) { // 실제 Canvas에서 그리는 로직
+
+            // Canvas 영역 설정
             val w = size.width
             val h = size.height
+
+            // 차트 여백 및 크기를 계산
             val topPad = 10f
-            val bottomPad = 34f
+            val bottomPad = 48f
             val leftPad = 34f
             val rightPad = 8f
             val chartW = w - leftPad - rightPad
             val chartH = h - topPad - bottomPad
-            highlightRect?.let { r ->
+
+            highlightRect?.let { r -> // 선택된 막대 위에 반투명 회색 강조 사각형을 그림
                 drawRect(
                     color = highlightColor,
                     topLeft = Offset(r.left, r.top),
                     size = androidx.compose.ui.geometry.Size(r.width, r.height)
                 )
             }
-            // grid
+
+            // 수평 격자선을 4개의 점선으로 그리기
             val gridLines = 4
             for (i in 0..gridLines) {
                 val y = topPad + chartH * (i / gridLines.toFloat())
@@ -481,20 +565,35 @@ private fun HistogramWithHighlightTooltip(
                     pathEffect = dash
                 )
             }
+
+            // X축, Y축 그리기
             drawLine(axisColor, Offset(leftPad, topPad), Offset(leftPad, topPad + chartH), 2f)
             drawLine(axisColor, Offset(leftPad, topPad + chartH), Offset(leftPad + chartW, topPad + chartH), 2f)
+
             val count = labels.size
             val step = chartW / count
             val centerX = { i: Int -> leftPad + step * i + step / 2f }
+
+            // 막대 너비 및 막대 사이 간격
             val barW = step * 0.18f
             val gap = step * 0.10f
+
+            // 각 막대의 높이를 계산
             for (i in 0 until count) {
+
+                // 데이터가 없으면 0, 있으면 그 값을 받아옴
                 val s = study.getOrElse(i) { 0 }
                 val e = exercise.getOrElse(i) { 0 }
+
+                // sH(공부 막대), eH(운동 막대)의 높이를 0~1사이로 제한하고,
+                // *0.90f를 통해 차트 높이의 90%를 최대 높이로 설정
                 val sH = (s.toFloat() / maxValue).coerceIn(0f, 1f) * (chartH * 0.90f)
                 val eH = (e.toFloat() / maxValue).coerceIn(0f, 1f) * (chartH * 0.90f)
+
                 val cx = centerX(i)
                 val baseY = topPad + chartH
+
+                // 운동 막대(왼쪽)
                 val exLeft = cx - (barW + gap / 2f)
                 drawRoundRect(
                     color = exerciseColor,
@@ -502,6 +601,8 @@ private fun HistogramWithHighlightTooltip(
                     size = androidx.compose.ui.geometry.Size(barW, eH),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f, 10f)
                 )
+
+                // 공부 막대(오른쪽)
                 val stLeft = cx + (gap / 2f)
                 drawRoundRect(
                     color = studyColor,
@@ -511,6 +612,8 @@ private fun HistogramWithHighlightTooltip(
                 )
             }
         }
+
+        // 히스토그램 밑에 요일/주차 레이블 표시
         Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -561,8 +664,8 @@ private fun TooltipCard(
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(title, fontWeight = FontWeight.SemiBold)
-            Text("운동 : $exercise", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-            Text("공부 : $study", color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f), fontWeight = FontWeight.SemiBold)
+            Text("운동 : ${formatMinutes(exercise)}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+            Text("공부 : ${formatMinutes(study)}", color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f), fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -592,4 +695,10 @@ private fun DiaryOrSummaryCard(
             }
         }
     }
+}
+
+// 시간 표현 포맷 함수
+private fun formatMinutes (min: Int) : String {
+    return if (min < 60) "${min}분"
+    else "${min/60}시간 ${"%02d".format(min % 60)}분"
 }

@@ -11,6 +11,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.background
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -18,16 +27,34 @@ import com.example.diaryapplication.ui.components.PrimaryPillButton
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 
-private data class OnboardPage(val title: String, val desc: String, val color: Color)
+private data class OnboardPage(
+    val title: String,
+    val desc: String,
+    val gradientStart : Color,
+    val gradientEnd : Color,
+    val icon : androidx.compose.ui.graphics.vector.ImageVector
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
     val pages = listOf(
-        OnboardPage("매일의 감정을 기록하세요", "짧은 기록만으로도 내 마음을 정리할 수 있어요.", Color(0xFF3182F6)),
-        OnboardPage("AI 챗봇과 대화해요", "오늘의 감정을 말해보세요.\n가벼운 대화도 가능해요.", Color(0xFF60A5FA)),
-        OnboardPage("나의 감정을 분석해요", "일기를 바탕으로 감정을 요약하고\n추천을 제공해요.", Color(0xFF1B64DA)),
-        OnboardPage("안전하게 보호해요", "PIN 설정으로 나의 기록을\n안전하게 지킬 수 있어요.", Color(0xFF00B86B)),
+        OnboardPage("매일의 감정을 기록하세요", "캘린더로 쉽게 일기를 작성하고,\n날씨, 운동시간, 공부시간 등\n하루를 다양하게 기록할 수 있어요",
+            Color(0xFF2B7FFF),
+            Color(0xFF00D3F3),
+            Icons.AutoMirrored.Outlined.MenuBook),
+        OnboardPage("AI 챗봇과 대화해요", "고민이 있거나 대화가 필요할 때,\nAI 챗봇이 언제든지 당신의 이야기를\n들어드려요",
+            Color(0xFFAD46FF),
+            Color(0xFFFB64B6),
+            Icons.AutoMirrored.Outlined.Chat),
+        OnboardPage("나의 감정을 분석해요", "주간, 월간 요약으로\n나의 감정 패턴과 활동을 확인하고\n더 나은 하루를 만들어가요",
+            Color(0xFFFF6900),
+            Color(0xFFFDC700),
+            Icons.Outlined.BarChart),
+        OnboardPage("안전하게 보호해요", "PIN 번호 설정으로 일기를 보호하고,\n알림 설정으로 매일 일기 작성을\n습관으로 만들어보세요",
+            Color(0xFF00C950),
+            Color(0xFF00D492),
+            Icons.Outlined.Person),
     )
 
     val pager = rememberPagerState(pageCount = { pages.size }) // 현재 몇 번째 페이지인지
@@ -113,11 +140,29 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Surface(
-                            color = p.color,
-                            shape = RoundedCornerShape(18.dp),
-                            tonalElevation = 2.dp,
-                            modifier = Modifier.size(84.dp)
-                        ) {}
+                            shape = RoundedCornerShape(28.dp),
+                            shadowElevation = 16.dp, // 그림자 효과 -> 높을 수록 진하게!
+                            color = Color.Transparent
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .clip(RoundedCornerShape(25.dp))
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(p.gradientStart, p.gradientEnd)
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = p.icon,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(60.dp)
+                                )
+                            }
+                        }
 
                         Spacer(Modifier.height(20.dp))
 

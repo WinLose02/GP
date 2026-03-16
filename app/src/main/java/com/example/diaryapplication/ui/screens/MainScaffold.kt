@@ -16,6 +16,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.*
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.diaryapplication.viewmodel.AuthViewModel
+import com.example.diaryapplication.viewmodel.DiaryViewModel
+import com.example.diaryapplication.viewmodel.ReportViewModel
 import com.example.diaryapplication.Route
 import com.example.diaryapplication.ui.theme.BlueLight
 import com.example.diaryapplication.ui.theme.BluePrimary
@@ -28,7 +32,11 @@ private data class BottomItem(
 @Composable
 fun MainScaffold(onLogout: () -> Unit) {
     val nav = rememberNavController() // 화면 이동 역할 네비게이션 컨트롤러
-// 하단 탭 바 항목들을 정의
+    val authViewModel : AuthViewModel = viewModel()
+    val diaryViewModel : DiaryViewModel = viewModel()
+    val reportViewModel : ReportViewModel = viewModel()
+
+    // 하단 탭 바 항목들을 정의
     val items = listOf(
         BottomItem(Route.Diary.path, "일기", Icons.Outlined.Edit),
         BottomItem(Route.Chat.path, "챗봇", Icons.Outlined.ChatBubbleOutline),
@@ -36,10 +44,12 @@ fun MainScaffold(onLogout: () -> Unit) {
         BottomItem(Route.Report.path, "요약", Icons.Outlined.BarChart),
         BottomItem(Route.My.path, "프로필", Icons.Outlined.PersonOutline),
     )
-// 현재 어떤 화면 있는지 경로를 실시간으로 가져옴
-// null이면 null 반환
+
+    // 현재 어떤 화면 있는지 경로를 실시간으로 가져옴
+    // null이면 null 반환
     val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
-// 하단 탭 바는 항상 표시
+
+    // 하단 탭 바는 항상 표시
     val showBottomBar = true
     Scaffold(
         bottomBar = {
@@ -51,7 +61,7 @@ fun MainScaffold(onLogout: () -> Unit) {
                     items.forEach { item ->
                         val selected = currentRoute == item.route // 현재 화면 경로와 선택된 탭의 경로가 같으면 true
                         if (item.isCenter) {
-// 중앙 메인 홈 버튼
+                            // 중앙 메인 홈 버튼
                             NavigationBarItem(
                                 selected = selected, // 선택 여부
                                 onClick = {
@@ -124,6 +134,8 @@ fun MainScaffold(onLogout: () -> Unit) {
             composable(Route.Home.path) {
                 HomeScreen(
                     padding = inner,
+                    authViewModel = authViewModel,
+                    diaryViewModel = diaryViewModel,
                     onWriteDiary = { // 일기 작성 버튼 클릭시
                         nav.navigate(Route.Diary.path) { // 해당 탭으로 이동
                             launchSingleTop = true // 이미 해당 탭이면, 중복 생성 방지
@@ -134,16 +146,29 @@ fun MainScaffold(onLogout: () -> Unit) {
                 )
             }
             composable(Route.Diary.path) {
-                DiaryScreen(padding = inner)
+                DiaryScreen(
+                    padding = inner,
+                    diaryViewModel = diaryViewModel
+                    )
             }
             composable(Route.Chat.path) {
-                ChatScreen(padding = inner)
+                ChatScreen(
+                    padding = inner,
+                    authViewModel = authViewModel
+                )
             }
             composable(Route.Report.path) {
-                ReportScreen(padding = inner)
+                ReportScreen(
+                    padding = inner,
+                    reportViewModel = reportViewModel
+                    )
             }
             composable(Route.My.path) {
-                MyPageScreen(padding = inner, onLogout = onLogout)
+                MyPageScreen(
+                    padding = inner,
+                    onLogout = onLogout,
+                    authViewModel = authViewModel
+                    )
             }
         }
     }
