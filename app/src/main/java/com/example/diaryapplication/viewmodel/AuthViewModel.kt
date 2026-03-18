@@ -35,9 +35,10 @@ class AuthViewModel : ViewModel() { // ViewModel을 상속받아 AuthViewModel�
             } catch (e: Exception) { // 만약 못가져와도, 앱은 실행이 되어야 하므로 따로 처리는 X }
             }
         }
+    }
 
         // 회원가입
-        fun signUp(
+    fun signUp(
             email: String,
             password: String,
             name: String,
@@ -75,7 +76,8 @@ class AuthViewModel : ViewModel() { // ViewModel을 상속받아 AuthViewModel�
         }
 
         // 로그인
-        fun login(
+
+    fun login(
             email: String,
             password: String,
             onSuccess: () -> Unit
@@ -101,7 +103,8 @@ class AuthViewModel : ViewModel() { // ViewModel을 상속받아 AuthViewModel�
         }
 
         // 로그아웃
-        fun logout(onComplete: () -> Unit) {
+
+    fun logout(onComplete: () -> Unit) {
             auth.signOut()
             isLoggedIn.value = false
             currentNickname.value = null
@@ -109,7 +112,8 @@ class AuthViewModel : ViewModel() { // ViewModel을 상속받아 AuthViewModel�
         }
 
         // 아이디(이메일) 찾기
-        fun findEmail(
+
+    fun findEmail(
             name: String,
             birthDate: String,
             onResult: (String?) -> Unit
@@ -133,7 +137,8 @@ class AuthViewModel : ViewModel() { // ViewModel을 상속받아 AuthViewModel�
         }
 
         // 비밀번호 재설정 이메일 발송
-        fun sendPasswordResetEmail(
+
+    fun sendPasswordResetEmail(
             email: String,
             onSuccess: () -> Unit,
             onFail: () -> Unit
@@ -153,7 +158,8 @@ class AuthViewModel : ViewModel() { // ViewModel을 상속받아 AuthViewModel�
         }
 
         // 비밀번호 재설정
-        fun resetPassword(
+
+    fun resetPassword(
             oobCode: String,
             newPassword: String,
             onSuccess: () -> Unit,
@@ -174,4 +180,3 @@ class AuthViewModel : ViewModel() { // ViewModel을 상속받아 AuthViewModel�
             }
         }
     }
-}

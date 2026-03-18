@@ -38,15 +38,9 @@ fun LoginScreen(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("login_prefs", Context.MODE_PRIVATE)}
 
-    var saveEmail by remember { mutableStateOf(prefs.getBoolean("save_email", false))}
-    var autoLogin by remember { mutableStateOf(prefs.getBoolean("auto_login", false))}
-    var email by remember { mutableStateOf(
-        if(prefs.getBoolean("save_email", false)) prefs.getString("saved_email", "")?:"" else ""
-            )}
-
     // 화면이 재구성돼도 값을 유지하기 위해 remeber
     // 초기 값은 빈 문자열이나, 값이 바뀌면 화면 자동 업데이트를 위해 mutableStateOf
-    // var email by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
     // ViewModel에서 로딩 중 여부, 에러 메시지를 실시간으로 받아옴
@@ -160,15 +154,6 @@ fun LoginScreen(
 
                     Button(
                         onClick = {
-                            // 아이디 저장 체크 여부에 따라 저장 / 삭제
-                            prefs.edit().apply{
-                                putBoolean("save_email", saveEmail)
-                                putBoolean("auto_login", autoLogin)
-                                if (saveEmail) putString("saved_email", email)
-                                else remove("saved_email")
-                                apply()
-                            }
-
                             // onClick을 누르면 ViewModel의 Login() 호출
                             viewModel.login(
                                 email = email,
@@ -206,28 +191,6 @@ fun LoginScreen(
                     }
 
                     Spacer(Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = saveEmail,
-                            onCheckedChange = { saveEmail = it },
-                            colors = CheckboxDefaults.colors(checkedColor = primaryBlue)
-                        )
-                        Text ("아이디 저장", fontSize = 13.sp, color = Color(0xFF5A6A7A))
-
-                        Spacer(Modifier.width(16.dp))
-
-                        Checkbox(
-                            checked = autoLogin,
-                            onCheckedChange = { autoLogin = it },
-                            colors = CheckboxDefaults.colors(checkedColor = primaryBlue)
-                        )
-
-                        Text("자동 로그인", fontSize = 13.sp, color  = Color(0xFF5A6A7A))
-                    }
 
                     // 아이디 찾기 | 비밀번호 찾기 형태로 배치
                     Row(
