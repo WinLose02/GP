@@ -1,4 +1,6 @@
 from openai import OpenAI
+import json
+import re  
 
 client = OpenAI()  # OPENAI_API_KEY 환경변수 사용
 
@@ -53,6 +55,12 @@ SYSTEM_PROMPT = """
 - 사용자가 조언을 원하면 조언을 해준다.
 """
 
+DEBUG_SELF_REFINE = True
+#True-> 개발 모드(출력 다됨)/ False->배포 모드(출력 안됨)
+SHOW_INTERNAL_LOG = True
+REFINE_THRESHOLD = 8.0
+MAX_REFINE_ROUNDS = 2
+
 
 def _safe_text(text: str, limit: int = 1200) -> str:
     return (text or "").strip()[:limit]
@@ -72,6 +80,98 @@ def _format_related_memories(related_memories) -> str:
     return "과거 관련 기록:\n" + "\n".join(lines)
 
 
+def _call_chat(system_prompt: str, user_prompt: str, temperature: float = 0.3) -> str:
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=temperature
+    )
+    return (response.choices[0].message.content or "").strip()
+
+
+def _evaluate_reply(user_input: str, reply: str) -> tuple[float, list[str]]:
+    eval_system_prompt = """
+(기존 그대로 유지)
+"""
+
+    eval_user_prompt = f"""[사용자 입력]
+{user_input}
+
+[상담 답변]
+{reply}
+"""
+
+    try:
+        result = _call_chat(eval_system_prompt, eval_user_prompt, temperature=0.0)
+        parsed = json.loads(result)
+
+        score = float(parsed.get("score", 0))
+        issues = parsed.get("issues", [])
+
+        if not isinstance(issues, list):
+            issues = ["평가 형식 오류"]
+
+        issues = [str(x).strip() for x in issues if str(x).strip()]
+        return score, issues[:3]
+
+    except Exception as e:
+        if SHOW_INTERNAL_LOG:
+            print("평가 파싱 오류:", e)
+        return 5.0, ["평가 파싱 오류"]
+
+
+def _refine_reply(user_input: str, draft: str, issues: list[str], related_memories=None) -> str:
+    refine_system_prompt = f"""
+너는 상담 답변을 새로 작성하는 전문가다.
+
+[절대 규칙]
+- 반드시 반말만 사용
+- 1~3문장
+- 감정 공감 포함
+- 질문은 필요할 때만 1개
+
+[중요]
+기존 문장을 고치지 말고, 완전히 새로 작성하라.
+
+[원본 규칙]
+{SYSTEM_PROMPT}
+"""
+
+    memory_block = _format_related_memories(related_memories)
+
+    # issues 없을 때도 강제 규칙 부여
+    if issues:
+        issue_text = "\n".join(f"- {issue}" for issue in issues)
+    else:
+        issue_text = """- 반드시 반말 유지
+- 1~3문장 유지
+- 감정 공감 포함
+- 더 자연스럽게 표현"""
+
+    refine_user_prompt = f"""{memory_block}
+
+[사용자 입력]
+{user_input}
+
+[기존 답변 초안]
+{draft}
+
+[수정할 문제점]
+{issue_text}
+
+위 문제점을 반영해서 더 나은 최종 상담 답변을 작성하라.
+"""
+
+    return _call_chat(refine_system_prompt, refine_user_prompt, temperature=0.3)
+
+
+def _has_critical_issue(text: str) -> bool:
+    return bool(re.search(r"(요[.!?]?$|니다|까요|세요|겠어요)", text))
+
+
 def chat_with_counselor(user_input: str, related_memories=None) -> str:
     user_input = _safe_text(user_input)
 
@@ -81,24 +181,70 @@ def chat_with_counselor(user_input: str, related_memories=None) -> str:
     if memory_block:
         user_prompt = f"{memory_block}\n\n현재 사용자 말:\n{user_input}"
 
-    print("상담 LLM 호출 시작")
+    if SHOW_INTERNAL_LOG:  
+        print("상담 LLM 호출 시작")
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.3
-        )
+        # 1차 답변 생성
+        draft = _call_chat(SYSTEM_PROMPT, user_prompt, temperature=0.5)
 
-        result = (response.choices[0].message.content or "").strip()
-        print("상담 LLM 호출 완료")
-        return result
+        #  존댓말이면 무조건 1회 강제 교정
+        if _has_critical_issue(draft):
+            draft = _refine_reply(user_input, draft, ["반말 아님"], related_memories)
+
+        if not DEBUG_SELF_REFINE:
+            if SHOW_INTERNAL_LOG:
+                print("상담 LLM 호출 완료")
+            return draft
+
+        best_reply = draft
+        best_score, best_issues = _evaluate_reply(user_input, draft)
+
+        if _has_critical_issue(draft):
+            best_score = min(best_score, 5.5)
+
+        if SHOW_INTERNAL_LOG:
+            print(f"[초안 답변] {draft}")
+            print(f"[초안 점수] {best_score}")
+            print(f"[초안 문제점] {best_issues}")
+
+        current_reply = draft
+        current_score = best_score
+        current_issues = best_issues
+
+        for i in range(MAX_REFINE_ROUNDS):
+            if current_score >= REFINE_THRESHOLD and not _has_critical_issue(current_reply):
+                break
+
+            refined = _refine_reply(user_input, current_reply, current_issues, related_memories)
+            refined_score, refined_issues = _evaluate_reply(user_input, refined)
+
+            if _has_critical_issue(refined):
+                refined_score = min(refined_score, 5.5)
+
+            if SHOW_INTERNAL_LOG:
+                print(f"[Refine {i+1} 답변] {refined}")
+                print(f"[Refine {i+1} 점수] {refined_score}")
+                print(f"[Refine {i+1} 문제점] {refined_issues}")
+
+            # 동일 점수 덮어쓰기 방지
+            if refined_score > best_score:
+                best_reply = refined
+                best_score = refined_score
+                best_issues = refined_issues
+
+            current_reply = refined
+            current_score = refined_score
+            current_issues = refined_issues
+
+        if SHOW_INTERNAL_LOG:
+            print("상담 LLM 호출 완료")
+
+        return best_reply
 
     except Exception as e:
-        print("상담 호출 오류:", e)
+        if SHOW_INTERNAL_LOG:  # 예외 로그 조건부 출력
+            print("상담 호출 오류:", e)
         return "오늘 하루도 정말 애썼어. 지금 느끼는 마음을 너무 몰아붙이지 않았으면 좋겠어."
 
 
