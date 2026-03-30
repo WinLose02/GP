@@ -2,3 +2,4 @@ best_model_2.pt
 data_preprocessing.py
 text_classifier.py
 emotion_mapper.py
+diaryapplication-*.json

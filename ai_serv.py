@@ -16,11 +16,10 @@ from video_analyzer import VideoAnalyzer
 # TODO: 서비스 계정 키 JSON 파일명을 아래에 입력하세요
 # Firebase 콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 생성
 # =============================================================================
-SERVICE_ACCOUNT_KEY = "your-service-account-key.json"  # ← 여기에 JSON 파일명 입력
-PROJECT_ID = "your-project-id"                          # ← 여기에 프로젝트 ID 입력
+SERVICE_ACCOUNT_KEY = "path/to/serviceAccountKey.json"  # ← 여기에 JSON 파일명 입력
 
 cred = credentials.Certificate(SERVICE_ACCOUNT_KEY)
-firebase_admin.initialize_app(cred, {"projectId": PROJECT_ID})
+firebase_admin.initialize_app(cred)
 db = firestore.client()
 
 # =============================================================================
