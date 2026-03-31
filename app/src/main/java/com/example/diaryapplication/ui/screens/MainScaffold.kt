@@ -17,9 +17,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.*
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
 import com.example.diaryapplication.viewmodel.AuthViewModel
 import com.example.diaryapplication.viewmodel.DiaryViewModel
 import com.example.diaryapplication.viewmodel.ReportViewModel
+import com.example.diaryapplication.viewmodel.MyPageViewModel
 import com.example.diaryapplication.Route
 import com.example.diaryapplication.ui.theme.BlueLight
 import com.example.diaryapplication.ui.theme.BluePrimary
@@ -36,6 +38,13 @@ fun MainScaffold(onLogout: () -> Unit) {
     val diaryViewModel : DiaryViewModel = viewModel()
     val reportViewModel : ReportViewModel = viewModel()
 
+    val context = LocalContext.current
+    val myPageViewModel : MyPageViewModel = viewModel()
+
+    // 현재 어떤 화면 있는지 경로를 실시간으로 가져옴
+    // null이면 null 반환
+    val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
+
     // 하단 탭 바 항목들을 정의
     val items = listOf(
         BottomItem(Route.Diary.path, "일기", Icons.Outlined.Edit),
@@ -45,15 +54,11 @@ fun MainScaffold(onLogout: () -> Unit) {
         BottomItem(Route.My.path, "프로필", Icons.Outlined.PersonOutline),
     )
 
-    // 현재 어떤 화면 있는지 경로를 실시간으로 가져옴
-    // null이면 null 반환
-    val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
-
     // 하단 탭 바는 항상 표시
     val showBottomBar = true
     Scaffold(
         bottomBar = {
-            if (showBottomBar) {
+            if(showBottomBar) {
                 NavigationBar(
                     containerColor = Color.White,
                     tonalElevation = 4.dp // 그림자 효과
@@ -67,8 +72,11 @@ fun MainScaffold(onLogout: () -> Unit) {
                                 onClick = {
                                     nav.navigate(item.route) { // 선택된 탭으로 이동
                                         launchSingleTop = true // 이미 그 화면이라면, 중복 생성 방지
-                                        restoreState = true // 현재 탭 상태에서 다른 탭에 갔다가 다시 왔을 때, 그 이전의 상태를 유지
-                                        popUpTo(nav.graph.startDestinationId) { saveState = true } // 백스택 정리
+                                        restoreState =
+                                            true // 현재 탭 상태에서 다른 탭에 갔다가 다시 왔을 때, 그 이전의 상태를 유지
+                                        popUpTo(nav.graph.startDestinationId) {
+                                            saveState = true
+                                        } // 백스택 정리
                                     }
                                 },
                                 icon = {
@@ -108,7 +116,9 @@ fun MainScaffold(onLogout: () -> Unit) {
                                     nav.navigate(item.route) { // 선택된 탭으로 이동
                                         launchSingleTop = true // 이미 그 화면이면, 중복 생성을 방지
                                         restoreState = true // 현재 탭에서 다른 탭에 갔다가 다시 왔을 때, 이전의 상태를 유지
-                                        popUpTo(nav.graph.startDestinationId) { saveState = true } // 백스택 정리
+                                        popUpTo(nav.graph.startDestinationId) {
+                                            saveState = true
+                                        } // 백스택 정리
                                     }
                                 },
                                 icon = { Icon(item.icon, contentDescription = item.label) },
@@ -153,8 +163,7 @@ fun MainScaffold(onLogout: () -> Unit) {
             }
             composable(Route.Chat.path) {
                 ChatScreen(
-                    padding = inner,
-                    authViewModel = authViewModel
+                    padding = inner
                 )
             }
             composable(Route.Report.path) {
@@ -167,7 +176,8 @@ fun MainScaffold(onLogout: () -> Unit) {
                 MyPageScreen(
                     padding = inner,
                     onLogout = onLogout,
-                    authViewModel = authViewModel
+                    authViewModel = authViewModel,
+                    myPageViewModel = myPageViewModel
                     )
             }
         }

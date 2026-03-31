@@ -1,27 +1,17 @@
 package com.example.diaryapplication.viewmodel
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.time.LocalTime
-data class UserProfile(
-    val name: String = "",
-    val nickname: String = "",
-    val email: String = "",
-    val birthDate: String = "" // "2000-01-01" 형태로
-)
-class MyPageViewModel : ViewModel() { // ViewModel을 상속받아 MyPageViewModel을 생성
+import com.example.diaryapplication.repository.MyPageRepository
+import com.example.diaryapplication.model.UserProfile
 
-    // FireBase AUth, store 인스턴스 생성
-    private val auth = FirebaseAuth.getInstance()
-    private val db = FirebaseFirestore.getInstance()
+class MyPageViewModel() : ViewModel() { // ViewModel을 상속받아 MyPageViewModel을 생성
 
-    // 사용자의 UID를 가져옴
-    private val uid get() = auth.currentUser?.uid
+    private val repository = MyPageRepository()
 
 
     val isLoading = MutableStateFlow(false) // 로딩 중 여부
@@ -52,18 +42,11 @@ class MyPageViewModel : ViewModel() { // ViewModel을 상속받아 MyPageViewMod
 
     // 프로필 불러오기
     fun loadProfile() {
-        val uid = uid ?: return // UID가 null이면 종료
+        val uid = repository.currentUid ?: return // UID가 null이면 종료
         viewModelScope.launch { // 비동기로 처리
             isLoading.value = true
             try {
-                val doc = db.collection("users").document(uid).get().await()
-                userProfile.value = UserProfile(
-                    // FireBase에서 내 사용자의 정보(문서/객체)를 가져옴
-                    name = doc.getString("name") ?: "",
-                    nickname = doc.getString("nickname") ?: "",
-                    email = doc.getString("email") ?: auth.currentUser?.email ?: "",
-                    birthDate = doc.getString("birth_date") ?: ""
-                )
+                userProfile.value = repository.getProfile(uid)
             } catch (e: Exception) {
                 errorMessage.value = e.message
             } finally {
@@ -79,18 +62,12 @@ class MyPageViewModel : ViewModel() { // ViewModel을 상속받아 MyPageViewMod
         birthDate: LocalDate,
         onSuccess: () -> Unit
     ) {
-        val uid = uid ?: return
+        val uid = repository.currentUid ?: return
         viewModelScope.launch {
             isLoading.value = true
             isSaveSuccess.value = false
             try {
-                db.collection("users").document(uid).update(
-                    mapOf(
-                        "name" to name,
-                        "nickname" to nickname,
-                        "birth_date" to birthDate.toString()
-                    )
-                ).await()
+                repository.saveProfile(uid, name, nickname, birthDate.toString())
                 userProfile.value = userProfile.value.copy(
                     // copy 사용은 이메일은 변경하지 않으므로, 기존값을 유지하기 위함 -> 변경된 필드만 교체하겠다
                     name = name,
@@ -109,15 +86,16 @@ class MyPageViewModel : ViewModel() { // ViewModel을 상속받아 MyPageViewMod
 
     // 알림 설정 불러오기
     private fun loadNotificationSetting() {
-        val uid = uid ?: return
+        val uid = repository.currentUid ?: return
         viewModelScope.launch {
             try {
-                val doc = db.collection("users").document(uid)
-                    .collection("notification_setting").document("setting")
-                    .get().await()
-                notificationEnabled.value = doc.getBoolean("enabled") ?: false
-                val hour = (doc.getLong("hour") ?: 21).toInt()
-                val minute = (doc.getLong("minute") ?: 0).toInt()
+                val (enabled, timeStr) = repository.getNotificationSetting(uid)
+                notificationEnabled.value = enabled
+
+                // Time을 HH:mm 형태로 LocalTime으로 변환
+                val alertTime = timeStr.split(":")
+                val hour = alertTime[0].toIntOrNull()?:21
+                val minute = alertTime[1].toIntOrNull()?:0
                 notifyTime.value = LocalTime.of(hour, minute)
             } catch (e: Exception) {
                 // 설정 없으면 기본값 유지
@@ -127,23 +105,21 @@ class MyPageViewModel : ViewModel() { // ViewModel을 상속받아 MyPageViewMod
 
     // 알림 설정 저장
     fun saveNotificationSetting(enabled: Boolean, time: LocalTime) {
-        val uid = uid ?: return
+        val uid = repository.currentUid ?: return
         viewModelScope.launch {
             try {
-                db.collection("users").document(uid)
-                    .collection("notification_setting").document("setting")
-                    .set(
-                        mapOf(
-                            "enabled" to enabled,
-                            "hour" to time.hour,
-                            "minute" to time.minute
-                        )
-                    ).await()
+
+                // time을 HH:mm 형태로 변환해서 DB에 저장
+                val alertTime = "%02d:%02d".format(time.hour, time.minute)
+                repository.saveNotificationSetting(uid, enabled, alertTime)
                 notificationEnabled.value = enabled
                 notifyTime.value = time
+
             } catch (e: Exception) {
                 errorMessage.value = "알림 설정 저장에 실패했습니다"
+                return@launch
             }
+
         }
     }
 
@@ -154,14 +130,11 @@ class MyPageViewModel : ViewModel() { // ViewModel을 상속받아 MyPageViewMod
 
     // PIN 설정 불러오기
     private fun loadPinSetting() {
-        val uid = uid ?: return
+        val uid = repository.currentUid ?: return
         viewModelScope.launch {
             try {
-                val doc = db.collection("users").document(uid)
-                    .collection("pin_setting").document("pin")
-                    .get().await()
-                val pin = doc.getString("pin")
-                if (pin != null) {
+                val (pin, isEnabled) = repository.getPinSetting(uid)
+                if (pin != null && isEnabled) {
                     savedPin.value = pin
                     pinEnabled.value = true
                 }
@@ -173,12 +146,10 @@ class MyPageViewModel : ViewModel() { // ViewModel을 상속받아 MyPageViewMod
 
     // PIN 저장
     fun savePin(pin: String) {
-        val uid = uid ?: return
+        val uid = repository.currentUid ?: return
         viewModelScope.launch {
             try {
-                db.collection("users").document(uid)
-                    .collection("pin_setting").document("pin")
-                    .set(mapOf("pin" to pin)).await()
+                repository.savePin(uid,pin)
                 savedPin.value = pin
                 pinEnabled.value = true
             } catch (e: Exception) {
@@ -189,12 +160,10 @@ class MyPageViewModel : ViewModel() { // ViewModel을 상속받아 MyPageViewMod
 
     // PIN 삭제
     fun deletePin() {
-        val uid = uid ?: return
+        val uid = repository.currentUid ?: return
         viewModelScope.launch {
             try {
-                db.collection("users").document(uid)
-                    .collection("pin_setting").document("pin")
-                    .delete().await()
+                repository.deletePin(uid)
                 savedPin.value = null
                 pinEnabled.value = false
             } catch (e: Exception) {
@@ -205,24 +174,15 @@ class MyPageViewModel : ViewModel() { // ViewModel을 상속받아 MyPageViewMod
 
     // 일기 개수 불러오기
     private fun loadDiaryCounts() {
-        val uid = uid ?: return
+        val uid = repository.currentUid ?: return
         viewModelScope.launch {
             try {
                 // 전체 일기 개수
-                val total = db.collection("diaries")
-                    .whereEqualTo("user_id", uid)
-                    .get().await()
-                totalDiaryCount.value = total.size()
+                totalDiaryCount.value = repository.getTotalDiaryCount(uid)
 
                 // 이번 달 일기 개수
-                val now = LocalDate.now()
-                val prefix = "%04d-%02d".format(now.year, now.monthValue) // 2026-03 형태로 맞춤
-                val thisMonth = db.collection("diaries")  // 이번달 작성한 일기를 조회
-                    .whereEqualTo("user_id", uid)
-                    .whereGreaterThanOrEqualTo("diary_date", "${prefix}-01")
-                    .whereLessThanOrEqualTo("diary_date", "${prefix}-31")
-                    .get().await()
-                thisMonthDiaryCount.value = thisMonth.size()
+                thisMonthDiaryCount.value = repository.getThisMonthDiaryCount(uid)
+
             } catch (e: Exception) {
                 // 개수 로드 실패 시 0 유지
             }

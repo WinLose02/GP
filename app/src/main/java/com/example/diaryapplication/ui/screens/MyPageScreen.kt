@@ -41,6 +41,8 @@ fun MyPageScreen(
     authViewModel : AuthViewModel = viewModel()
 ) {
 
+    val context = LocalContext.current
+
     // 사용자 프로필 정보
     val userProfile by myPageViewModel.userProfile.collectAsState()
     val notificationEnabled by myPageViewModel.notificationEnabled.collectAsState()

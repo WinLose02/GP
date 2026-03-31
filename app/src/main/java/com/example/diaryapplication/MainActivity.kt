@@ -38,6 +38,8 @@ fun RootNav(deepLink: String? = null) {
     }
 
     // 딥 링크가 있으면 ResetPassword 화면으로 이동하게끔!
+    // 안드로이드는 링크를 전달 받을 수 있는 곳은 MainActivity 밖에 안됨
+    // 그래서 MainActivity.kt 파일에서 처리
     LaunchedEffect(deepLink){
         if(deepLink != null && deepLink.startsWith("diaryapp://reset-password")) {
             nav.navigate(Route.ResetPassword.path) {
@@ -45,6 +47,7 @@ fun RootNav(deepLink: String? = null) {
             }
         }
     }
+
     NavHost(
         navController = nav,
         /*

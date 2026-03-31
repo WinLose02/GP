@@ -1,34 +1,23 @@
 package com.example.diaryapplication.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
-import java.time.temporal.TemporalAdjusters
+import android.net.Uri
+import com.example.diaryapplication.repository.DiaryRepository
+import com.google.firebase.Timestamp
+import java.io.File
+import com.example.diaryapplication.model.DiaryEntry
+import kotlinx.coroutines.delay
 
-// 일기 데이터 모델
-data class DiaryEntry(
-    val id: String = "",
-    val diaryDate: String = "", // "2026-03-09" 형식
-    val content: String = "", // 일기 내용
-    val weather: String = "SUNNY", // 날씨
-    val exerciseMin: Int = 0, // 운동 시간 (분)
-    val studyMin: Int = 0, // 공부 시간 (분)
-    val routine: String = "", // 하루 일과
-    val bestThing: String = "", // 가장 좋았던 일
-    val regretThing: String = "", // 가장 아쉬웠던 일
-    val imageUrl: String = "", // TODO: 사진 URL (Firebase Storage와 연동 예정)
-    val emotionEmoji: String = "" // TODO: 감정 이모지 (AI 감정 분석 연동 예정)
-)
 
 class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel을 생성
 
-    // Firebase Auth, Firestore 인스턴스를 생성
-    private val auth = FirebaseAuth.getInstance()
-    private val db = FirebaseFirestore.getInstance()
+    // DiaryRepository 선언
+    private val repository = DiaryRepository()
+
+    private val faceEmotionLog = mutableListOf<String>()
 
 
     val isLoading = MutableStateFlow(false) // 로딩 중 여부
@@ -50,36 +39,14 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
     // 연속 일기 작성 일수
     val streakCount = MutableStateFlow(0)
 
-    // 현재 로그인한 유저의 UID를 가져옴
-    private val uid get() = auth.currentUser?.uid
 
     // 이번 달 일기 이모지를 가져오는 함수 -> 캘린더에 표시를 위함
     fun loadMonthEmojis(year: Int, month: Int) {
-        val uid = uid ?: return // 현재 로그인한 유저의 UID 가져옴. 없으면 함수가 종료
+        val uid = repository.currentUid ?: return // 현재 로그인한 유저의 UID 가져옴. 없으면 함수가 종료
 
         viewModelScope.launch { // 비동기로 처리
             try {
-                // "2026-03" 형식으로 해당 월의 일기들을 가져옴
-                val prefix = "%04d-%02d".format(year, month)
-
-                val result = db.collection("diaries") // diaries 컬렉션에서 일기를 가져옴
-                    .whereEqualTo("user_id", uid) // 필터링(1) -> User_ID
-                    .whereGreaterThanOrEqualTo("diary_date", "${prefix}-01") // 필터링(2) -> 1일 이후 날짜의 일기
-                    .whereLessThanOrEqualTo("diary_date", "${prefix}-31") // 필터링(3) -> 31일 이전 날짜의 일기
-                    .get().await()
-
-                val map = mutableMapOf<LocalDate, String>() // 날짜-이모지를 담을 Map 형태의 컨테이너 생성
-
-                result.documents.forEach { doc -> // 가져온 일기를 탐색하면서
-                    val dateStr = doc.getString("diary_date") ?: return@forEach // 일기 날짜와
-                    val emoji = doc.getString("emotion_emoji") ?: return@forEach // 일기 이모지를 가져옴
-
-                    if (emoji.isNotEmpty()) { // 만약 이모지가 있으면
-                        val date = LocalDate.parse(dateStr) // 날짜(문자열 형태)를 LocalDate로 변환
-                        map[date] = emoji // 이모지도 입력
-                    }
-                }
-                emotionEmojiMap.value = map // 완성된 Map을 저장
+                emotionEmojiMap.value = repository.getMonthEmojis(uid, year, month) // 완성된 Map을 저장
             } catch (e: Exception) {
                 // 이모지 로드 실패 시 무시
             }
@@ -88,37 +55,14 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
 
     // 특정 날짜 일기 불러오기
     fun loadDiary(date: LocalDate) {
-        val uid = uid ?: return // UID가 없으면 종료
+        val uid = repository.currentUid ?: return // UID가 없으면 종료
 
         viewModelScope.launch { // 비동기로 처리
             isLoading.value = true // 로딩 시작
             currentDiary.value = null // 이전 일기 데이터를 초기화
 
             try {
-                val dateStr = date.toString() // "2026-03-09" 형태로 가져옴
-                val result = db.collection("diaries") // DB에서 해당 날짜의 내 일기를 가져옴
-                    .whereEqualTo("user_id", uid)
-                    .whereEqualTo("diary_date", dateStr)
-                    .limit(1)
-                    .get().await()
-                val doc = result.documents.firstOrNull() // 결과 중 첫번째 문서(객체)를 가져옴
-
-                if (doc != null) { // 해당 날짜의 일기가 있으면
-                    currentDiary.value = DiaryEntry(
-                        // 일기에 작성된 각 값들을 다 불러옴
-                        id = doc.id,
-                        diaryDate = doc.getString("diary_date") ?: "",
-                        content = doc.getString("content") ?: "",
-                        weather = doc.getString("weather") ?: "SUNNY",
-                        exerciseMin = (doc.getLong("exercise_min") ?: 0).toInt(),
-                        studyMin = (doc.getLong("study_min") ?: 0).toInt(),
-                        routine = doc.getString("routine") ?: "",
-                        bestThing = doc.getString("best_thing") ?: "",
-                        regretThing = doc.getString("regret_thing") ?: "",
-                        imageUrl = doc.getString("image_url") ?: "",
-                        emotionEmoji = doc.getString("emotion_emoji") ?: ""
-                    )
-                }
+                currentDiary.value = repository.getDiary(uid, date.toString())
             } catch (e: Exception) {
                 errorMessage.value = e.message
             } finally {
@@ -137,9 +81,10 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
         routine: String,
         bestThing: String,
         regretThing: String,
+        imageUri: Uri?,
         onSuccess: () -> Unit
     ) {
-        val uid = uid ?: return
+        val uid = repository.currentUid ?: return
         viewModelScope.launch {
             isLoading.value = true
             errorMessage.value = null
@@ -147,7 +92,22 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
 
             try {
                 val dateStr = date.toString()
-                val data = hashMapOf(
+
+                val imageUrl = if (imageUri != null) {
+                    repository.uploadImage(uid, dateStr, imageUri)
+                } else {
+                    currentDiary.value?.imageUrl?:""
+                }
+
+                val finalEmotion = faceEmotionLog
+                    .groupingBy { it }
+                    .eachCount()
+                    .maxByOrNull{it.value}
+                    ?.key ?:""
+
+                val emotionEmoji = getEmotionEmoji(finalEmotion)
+
+                val data = hashMapOf<String, Any>(
                     "user_id" to uid,
                     "diary_date" to dateStr,
                     "content" to content,
@@ -157,19 +117,27 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
                     "routine" to routine,
                     "best_thing" to bestThing,
                     "regret_thing" to regretThing,
-                    "image_url" to "", // TODO: firestorage 작업
-                    "emotion_emoji" to "", // TODO: 감정 분석 모델의 값을 받아와 여기에 들어가기
-                    "updated_at" to com.google.firebase.Timestamp.now()
+                    "image_url" to imageUrl,
+                    "emotion_emoji" to emotionEmoji, // TODO: 감정 분석 모델의 값을 받아와 여기에 들어가기
+                    "updated_at" to Timestamp.now()
                 )
 
                 val existing = currentDiary.value // 현재 선택된 날짜에 기존의 일기가 있는지를 확인
 
                 if (existing != null && existing.id.isNotEmpty()) { // 기존에 일기가 있다면, 일기 내용을 수정
                     // 기존 일기 수정
-                    db.collection("diaries").document(existing.id).update(data as Map<String, Any>).await()
+                    repository.updateDiary(existing.id, data)
+
+                    if(finalEmotion.isNotEmpty()) {
+                        repository.saveEmotionResult(existing.id, finalEmotion)
+                    }
+
                 } else { // 기존에 일기가 없다면, 일기를 새로 작성
-                    data["created_at"] = com.google.firebase.Timestamp.now()
-                    db.collection("diaries").add(data).await()
+                    data["created_at"] = Timestamp.now()
+                    val newId = repository.addDiary(data)
+                    if(finalEmotion.isNotEmpty()) {
+                        repository.saveEmotionResult(newId, finalEmotion)
+                    }
                 }
 
                 isSaveSuccess.value = true // 저장 성공 시, 성공 상태로 변경
@@ -186,28 +154,35 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
         }
     }
 
+
+    fun sendVideoToServer(videoFile: File, diaryText : String, date: LocalDate) {
+
+        val uid = repository.currentUid ?: return
+
+        viewModelScope.launch {
+            val emotion = repository.sendVideoToServer(
+                videoFile,
+                diaryText,
+                uid,
+                date.toString())
+
+            if (emotion != null) {
+                faceEmotionLog.add(emotion)
+            }
+
+            // 서버가 감정 분석을 완료 대기 후에 결과를 읽어옴
+            delay(3000L)
+            loadEmotionAndUpdate(date)
+        }
+    }
+
     fun loadMonthStreak() {
-        val uid = uid ?: return
+        val uid = repository.currentUid ?: return
         val today = LocalDate.now() // 오늘 날짜를 가져옴
         viewModelScope.launch {
             try{
                 val prefix = "%04d-%02d".format(today.year, today.monthValue) // 0000-00 형태의 문자열 -> 이번달 일기만 조회하기 위함
-
-                // 조건에 맞는 일기를 firebase에서 조회
-                // 내 일기만
-                // 이번달 1일~31일
-                val result = db.collection("diaries")
-                    .whereEqualTo("user_id", uid)
-                    .whereGreaterThanOrEqualTo("diary_date", "${prefix}-01")
-                    .whereLessThanOrEqualTo("diary_date", "${prefix}-31")
-                    .get().await()
-
-                // 조회된 값들 중에서 diary_date 필드만 뽑아서 Set 형태로 변환
-                // mapNotNull -> null인 날짜는 제외하고 뽑아냄
-                val dates = result.documents
-                    .mapNotNull { it.getString("diary_date") }
-                    .toSet()
-
+                val dates = repository.getMonthWrittenDates(uid, prefix)
                 writtenDates.value = dates // 스트릿 그리드에 사용할 날짜 Set을 업데이트
 
                 // 연속 작성 횟수를 계산
@@ -226,5 +201,46 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
     // 에러 메시지 초기화
     fun clearError() {
         errorMessage.value = null
+    }
+
+    private fun getEmotionEmoji(emotion: String) : String {
+        return when(emotion) {
+            "기쁨" -> "😊"
+            "슬픔" -> "😢"
+            "분노" -> "😠"
+            "불안" -> "😰"
+            "당황" -> "😳"
+            else   -> ""
+        }
+    }
+
+    fun loadEmotionAndUpdate(date: LocalDate) {
+        val uid = repository.currentUid?: return
+
+        viewModelScope.launch{
+
+            try {
+                // 1. 해당 날짜의 일기 문서 ID를 가져옴
+                val diary = repository.getDiary(uid, date.toString()) ?: return@launch
+                val diaryId = diary.id
+
+                // 2. 서버에서 저장한 final_emotion 읽기
+                val finalEmotion = repository.getEmotionResult(diaryId) ?: return@launch
+
+                // 3. 감정을 앱에 표시할 이모지로 변환
+                val emotionEmoji = getEmotionEmoji(finalEmotion)
+
+                // 4. diary 컬렉션에 emotion_emoji 업데이트
+                if (emotionEmoji.isNotEmpty()) {
+                    repository.updateEmotionEmoji(diaryId, emotionEmoji)
+                }
+
+                // 5. 캘린더에 이모지를 업데이트
+                loadMonthEmojis(date.year, date.monthValue)
+
+            } catch(e: Exception) {
+                // 분석 결과가 없어도 앱은 실행해야 하므로 무시
+            }
+        }
     }
 }

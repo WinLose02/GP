@@ -17,7 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +35,19 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.util.Locale
 import kotlin.math.max
+import android.Manifest
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
+import androidx.camera.video.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.io.File
+
 
 // 날씨 타입
 private enum class WeatherType(val label: String, val icon: @Composable () -> Unit) {
@@ -49,6 +61,7 @@ fun DiaryScreen(
     padding: PaddingValues, // 여백값
     diaryViewModel: DiaryViewModel = viewModel() // DB 통신을 위한 ViewModel
 ) {
+
     val today = remember { LocalDate.now() } // 오늘 날짜
     val yesterday = remember { LocalDate.now().minusDays(1) } // 어제 날짜
     var selectedDate by remember { mutableStateOf(today) } // 캘린더에서 선택된 날짜(디폴트: 오늘)
@@ -67,12 +80,87 @@ fun DiaryScreen(
     var exerciseMin by remember { mutableIntStateOf(0) } // 운동 시간
     var studyMin by remember { mutableIntStateOf(0) } // 공부 시간
 
+    // 카메라 관련 변수들을 선언
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // 카메라 권한 허용 여부
+    // 기본적으론 False이지만, 권한이 허용이 된 이후에는 True로 설정하여 카메라를 실행시킴
+    var hasCameraPermission by remember { mutableStateOf(false) }
+
+    // 얼굴 표정 분석 결과를 누적해서 저장하는 리스트
+    // 일기를 저장 시에 이 리스트를 활용해서 최종 감정을 결정
+    // AI 서버에게서 받은 결과를 여기에 저장
+    var videoCapture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
+    val scope = rememberCoroutineScope()
+
+    // val faceEmotionLog = remember { mutableStateListOf<String>() }
+
+    // 카메라 권한 요청 런처
+    // 사용자가 허용 및 거부를 하면 결과를 granted로 들어옴 -> true or false
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasCameraPermission = granted
+    }
+
+    // DiaryScreen이 처음 실행될때에만 권한 런처를 실행 -> 한 번만 권한을 요청
+     LaunchedEffect(Unit){
+         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+     }
+
+    LaunchedEffect(videoCapture) {
+        val vc = videoCapture ?: return@LaunchedEffect
+
+        while(true){
+            // cacheDir에 임시로 파일을 생성(갤러리에 저장은X)
+            val tempFile = File(
+                context.cacheDir,
+                "faceVideo_${System.currentTimeMillis()}.mp4"
+            )
+
+            val fileOutput = FileOutputOptions.Builder(tempFile).build()
+
+            // 녹화를 시작
+            val recording = vc.output
+                .prepareRecording(context, fileOutput)
+                .start(ContextCompat.getMainExecutor(context)) { event ->
+                    when(event) {
+                        is VideoRecordEvent.Finalize -> {
+                            if(!event.hasError()) {
+                                scope.launch {
+                                    diaryViewModel.sendVideoToServer(tempFile, diaryText, selectedDate) // 서버에 전송 후 삭제
+                                }
+                            } else {
+                                tempFile.delete()
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+
+            delay(5000L) // 5초 대기
+            recording.stop()
+            delay(5000L) // 다음 녹화 전 대기
+        }
+    }
+
+
+
     LaunchedEffect(month) { // 달이 바뀔 때마다 해당 달의 감정 이모지를 DB에서 가져옴
         diaryViewModel.loadMonthEmojis(month.year, month.monthValue)
     }
     LaunchedEffect(selectedDate) { // selectedDate가 바뀔때마다 해당 날짜의 일기를 불러옴
         diaryViewModel.loadDiary(selectedDate)
     }
+
+    // 사진 선택
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) } // 선택된 사진의 경로 (null이면 사진 X)
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri -> selectedImageUri = uri } // 사진 선택 완료 시, 사진의 URI 저장
+    )
+
     LaunchedEffect(currentDiary) { // currentDiary가 바뀔 때마다 값을 업데이트
         val diary = currentDiary
         if (diary != null) { // 일기가 있으면 기존 내용으로 필드를 채우기
@@ -83,6 +171,10 @@ fun DiaryScreen(
             exerciseMin = diary.exerciseMin
             studyMin = diary.studyMin
             weather = WeatherType.entries.find { it.name == diary.weather } ?: WeatherType.SUNNY
+
+            selectedImageUri = if (diary.imageUrl.isNotEmpty()) {
+                Uri.parse(diary.imageUrl)
+            } else null
         } else { // 일기가 없으면 모든 필드를 공백으로 초기화
             diaryText = ""
             routineText = ""
@@ -91,6 +183,7 @@ fun DiaryScreen(
             exerciseMin = 0
             studyMin = 0
             weather = WeatherType.SUNNY
+            selectedImageUri = null
         }
     }
 
@@ -101,12 +194,65 @@ fun DiaryScreen(
         if (isSaveSuccess) snackbarHostState.showSnackbar("일기가 저장되었습니다 ✅") // 스낵바 메시지 출력
     }
 
-    // 사진 선택
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) } // 선택된 사진의 경로 (null이면 사진 X)
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-        onResult = { uri -> selectedImageUri = uri } // 사진 선택 완료 시, 사진의 URI 저장
-    )
+
+
+    // 1dp 사이즈(안보임)의 전면 카메라
+
+    /*
+        1. hasCameraPermission이 true일때만 작동
+        2. DiaryScreen 화면에 있을 때만 작동
+        3. 그 외 탭이나 앱을 종료하면, 생명 주기 관리인 lifecycleOwner에 의해 자동으로 카메라 종료
+     */
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if(hasCameraPermission) { // 카메라 권한이 허용된 경우에만 카메라를 실행
+            AndroidView( // PreviewView가 Android View 형태이므로 AndroidView로 감싸야 함
+                factory = { ctx ->
+                    val previewView = PreviewView(ctx)  // 카메라 미리보기 View를 생성
+                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx) // 카메라를 관리하는 핵심 객체 -> 시간이 걸리므로 Future 형태로 반환
+
+                    cameraProviderFuture.addListener({ // 카메라가 준비 완료 됐을 때, 실행시키기 위해 Listener 등록
+                        val cameraProvider = cameraProviderFuture.get() // 준비된 카메라 객체를 가져옴
+
+                        // 미리 보기 : previewView에 연결
+                        val preview = Preview.Builder()
+                            .build()
+                            .also { it.setSurfaceProvider(previewView.surfaceProvider) }
+
+                        val recorder = Recorder.Builder()
+                            .setQualitySelector(QualitySelector.from(Quality.SD))
+                            .build()
+
+                        val vc = VideoCapture.withOutput(recorder)
+
+                        try {
+                            cameraProvider.unbindAll() // 기존 바인딩 해제 -> 이전에 연결된 카메라가 있으면 전부 해제
+
+                            // DiaryScreen의 lifecycleOwner에 카메라를 묶음
+                            // 그렇게 해서 다른 탭이나 앱을 종료 시 자동으로 카메라를 종료
+                            // --> 생명 주기로 관리를 함
+                            cameraProvider.bindToLifecycle(
+                                lifecycleOwner, // DiaryScreen의 생명주기
+                                CameraSelector.DEFAULT_FRONT_CAMERA, // 전면 카메라를 선택
+                                preview, // 미리보기를 연결
+                                vc
+                            )
+                            videoCapture = vc
+                        } catch (e: Exception) {
+                            // 카메라 실행 실패시 앱은 종료되면 안되므로
+                            // 예외가 발생해도 별도 처리는 X
+                        }
+                    }, ContextCompat.getMainExecutor(ctx)) // Listener의 파라미터 -> 준비 완료 콜백을 메인 스레드에서 함을 의미
+
+                    previewView // factory의 반한값 -> 이 반환값을 화면에 표시
+                },
+                        modifier = Modifier.size(1.dp) // 그 반환값은 1.dp 사이즈로 설정
+                    )
+                }
+
+    }
+
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { _ ->
@@ -125,6 +271,7 @@ fun DiaryScreen(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
+
             // 날짜 선택
             RoundedCard(modifier = Modifier.fillMaxWidth()) {
                 CalendarHeader(
@@ -214,7 +361,9 @@ fun DiaryScreen(
                         )
                     },
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth().height(54.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
                 ) {
                     Icon(Icons.Outlined.CameraAlt, contentDescription = null)
                     Spacer(Modifier.width(10.dp))
@@ -277,7 +426,9 @@ fun DiaryScreen(
             // 저장하기
             PrimaryPillButton(
                 text = if (isLoading) "저장 중 . . . " else "일기 저장하기",
-                onClick = { // TODO:  AI 감정 분석 + DB 저장
+                onClick = {
+                    // TODO:  AI 감정 분석
+                    // faceEmotionLog를 활용해서 감정을 결정
                     diaryViewModel.saveDiary(
                         date = selectedDate,
                         content = diaryText,
@@ -287,15 +438,20 @@ fun DiaryScreen(
                         routine = routineText,
                         bestThing = bestThing,
                         regretThing = regretThing,
+                        imageUri = selectedImageUri,
                         onSuccess = {}
                     )
                 },
                 enabled = !isLoading,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
             )
         }
     }
 }
+
+
 // 안내 배너
 @Composable
 private fun InfoBanner(text: String) {
@@ -411,7 +567,10 @@ private fun WeatherRow(selected: WeatherType, onSelect: (WeatherType) -> Unit) {
             Surface(
                 shape = RoundedCornerShape(14.dp),
                 color = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else AppFieldColor,
-                modifier = Modifier.weight(1f).height(64.dp).clickable { onSelect(item) }
+                modifier = Modifier
+                    .weight(1f)
+                    .height(64.dp)
+                    .clickable { onSelect(item) }
             ) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -449,7 +608,9 @@ private fun HelperCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.background(gradient, RoundedCornerShape(18.dp)).padding(16.dp),
+            modifier = Modifier
+                .background(gradient, RoundedCornerShape(18.dp))
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -490,7 +651,9 @@ private fun DurationPickerField(
     Column(modifier = modifier) {
         Text("$title (시간/분)", style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(8.dp))
-        Box(modifier = Modifier.fillMaxWidth().clickable { open = true }) {
+        Box(modifier = Modifier
+            .fillMaxWidth()
+            .clickable { open = true }) {
             OutlinedTextField(
                 value = formatDuration(totalMinutes), // 90분 -> 1시간 30분 형태로 변환
                 onValueChange = {},
@@ -505,7 +668,9 @@ private fun DurationPickerField(
                     disabledTextColor = MaterialTheme.colorScheme.onSurface,
                     disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp)
             )
         }
     }
