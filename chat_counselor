@@ -1,11 +1,8 @@
 from openai import OpenAI
 import json
-import re  
+import re
 
 client = OpenAI()  # OPENAI_API_KEY 환경변수 사용
-
-
- 
 
 SYSTEM_PROMPT = """
 너는 사용자의 감정을 공감하고 마음을 정리하도록 돕는 대화 파트너다.
@@ -34,7 +31,7 @@ SYSTEM_PROMPT = """
 감정별 응답 규칙:
 - 초기 응답은 일기를 통해 나온 감정 값을 가지고 판단한다.
 - 이후 대화를 통해 사용자의 감정이 달라졌다고 분명히 드러나면, 초기 감정에 고정되지 않고 현재 드러나는 감정을 기준으로 대화를 이어간다.
-- 사용자의 감정이 분노상태라면, 감정을 진정시키고 이유를 짚는다. 
+- 사용자의 감정이 분노상태라면, 감정을 진정시키고 이유를 짚는다.
 - 사용자의 감정이 슬픔상태이라면, 해결책보다 먼저 감정을 충분히 공감하고, 무리하게 기운을 내라고 하지 않는다.
 - 사용자의 감정이 불안상태이라면, 질문보다 먼저 안정감을 주는 말과 안심의 표현을 우선하고, 한 번에 하나씩 정리할 수 있도록 돕는다.
 - 사용자의 감정이 기쁨상태이라면, 그 감정을 함께 긍정적으로 반응하고, 왜 좋게 느껴졌는지 자연스럽게 이어서 묻는다.
@@ -50,10 +47,20 @@ SYSTEM_PROMPT = """
 """
 
 DEBUG_SELF_REFINE = True
-#True-> 개발 모드(출력 다됨)/ False->배포 모드(출력 안됨)
+# True -> 개발 모드(출력 다됨) / False -> 배포 모드(출력 안됨)
 SHOW_INTERNAL_LOG = True
 REFINE_THRESHOLD = 8.0
 MAX_REFINE_ROUNDS = 2
+
+
+class ChatState:
+    def __init__(self):
+        self.prev_reply = None
+        self.asked_question_tags = []
+
+    def reset(self):
+        self.prev_reply = None
+        self.asked_question_tags = []
 
 
 def _safe_text(text: str, limit: int = 1200) -> str:
@@ -86,21 +93,150 @@ def _call_chat(system_prompt: str, user_prompt: str, temperature: float = 0.3) -
     return (response.choices[0].message.content or "").strip()
 
 
-def _evaluate_reply(user_input: str, reply: str) -> tuple[float, list[str]]:
+def _extract_question_tag(reply: str) -> str:
+    text = reply.replace(" ", "")
+
+    tag_patterns = {
+        "hardest_part": [
+            "어떤게제일힘들어", "무엇이가장힘들어", "뭐가제일힘들어"
+        ],
+        "anxiety_reason": [
+            "왜불안", "무엇때문에불안", "어떤게불안"
+        ],
+        "anger_reason": [
+            "왜화가났", "무엇때문에화가났", "억울", "답답했던게있"
+        ],
+        "sadness_reason": [
+            "왜슬픈", "무슨일이있었", "어떤일이제일마음에남"
+        ],
+        "discomfort_reason": [
+            "무엇이가장불편", "뭐가제일불편", "어떤점이가장거슬"
+        ],
+        "emotion_check": [
+            "화가나있는거같아", "당황한거같아", "맞을까?", "그런기분이야?"
+        ],
+    }
+
+    for tag, patterns in tag_patterns.items():
+        for p in patterns:
+            if p in text:
+                return tag
+    return ""
+
+
+def _is_similar_reply(current_reply: str, previous_reply: str | None) -> bool:
+    if not previous_reply:
+        return False
+
+    cur = current_reply.strip()
+    prev = previous_reply.strip()
+
+    if not cur or not prev:
+        return False
+
+    if cur == prev:
+        return True
+
+    repeated_patterns = [
+        "많이 힘들었겠네",
+        "정말 힘들었겠네",
+        "많이 지쳤겠네",
+        "어떤 게 제일 힘들어",
+        "왜 불안해",
+        "천천히 말해줘",
+        "오늘 많이 힘들었겠네",
+        "많이 힘들었겠다",
+    ]
+
+    overlap = 0
+    for p in repeated_patterns:
+        if p in cur and p in prev:
+            overlap += 1
+
+    return overlap >= 2
+
+
+def _detect_repeat_issues(
+    reply: str,
+    previous_reply: str | None = None,
+    asked_question_tags: list[str] | None = None
+) -> list[str]:
+    issues = []
+    asked_question_tags = asked_question_tags or []
+
+    if _is_similar_reply(reply, previous_reply):
+        issues.append("직전 답변과 표현이 지나치게 비슷함")
+
+    tag = _extract_question_tag(reply)
+    if tag and tag in asked_question_tags:
+        issues.append("이미 했던 핵심 질문을 반복하고 있음")
+
+    return issues
+
+
+def _evaluate_reply(
+    user_input: str,
+    reply: str,
+    previous_reply: str | None = None,
+    asked_question_tags: list[str] | None = None
+):
     eval_system_prompt = """
-(기존 그대로 유지)
+너는 상담 답변을 평가하는 평가자다.
+
+다음 기준으로 평가하라:
+
+1. 감정 충분히 공감하였는가? (0~2점)
+2. 맥락을 이해하였는가? (0~2점)
+3. 규칙 준수 (반말, 1~3문장) (0~2점)
+4. 질문 적절성 (0~2점)
+5. 표현 자연스러움 및 오타 (0~2점)
+
+감점 기준:
+- 질문만 하고 공감이 부족하면 감점
+- "무슨 일이 있었어?" 같은 일반적 질문 반복 시 감점
+- 너무 짧거나 단순하면 감점
+- 직전 답변과 표현이 비슷하면 감점
+- 이미 했던 핵심 질문을 다시 물으면 감점
+
+출력 형식:
+{
+  "score": 0,
+  "issues": ["문제1", "문제2"]
+}
+
+규칙:
+- score는 0~10 점 사이
+- issues는 한국어 짧은 문장 1~3개
+- JSON 외 다른 텍스트 절대 금지
 """
 
-    eval_user_prompt = f"""[사용자 입력]
+    previous_reply_text = previous_reply if previous_reply else "없음"
+    asked_text = ", ".join(asked_question_tags or []) if asked_question_tags else "없음"
+
+    eval_user_prompt = f"""
+[사용자 입력]
 {user_input}
+
+[직전 답변]
+{previous_reply_text}
+
+[이미 사용한 질문 태그]
+{asked_text}
 
 [상담 답변]
 {reply}
 """
 
+    result = ""
+
     try:
         result = _call_chat(eval_system_prompt, eval_user_prompt, temperature=0.0)
-        parsed = json.loads(result)
+
+        match = re.search(r'\{.*\}', result, re.DOTALL)
+        if not match:
+            raise ValueError("JSON 없음")
+
+        parsed = json.loads(match.group())
 
         score = float(parsed.get("score", 0))
         issues = parsed.get("issues", [])
@@ -109,56 +245,108 @@ def _evaluate_reply(user_input: str, reply: str) -> tuple[float, list[str]]:
             issues = ["평가 형식 오류"]
 
         issues = [str(x).strip() for x in issues if str(x).strip()]
+
+        if not issues:
+            issues = ["표현이 단순함"]
+
+        # 일반 질문 반복 감점
+        if "무슨 일이 있었" in reply or "이야기해줄래" in reply:
+            score -= 2
+            issues.append("질문 반복")
+
+        # 질문 위주 답변 감점
+        if reply.count("?") >= 1 and len(reply.split(".")) <= 2:
+            score -= 1.5
+            issues.append("질문 위주 답변")
+
+        # 세션 반복 감점
+        repeat_issues = _detect_repeat_issues(
+            reply=reply,
+            previous_reply=previous_reply,
+            asked_question_tags=asked_question_tags
+        )
+        if repeat_issues:
+            score -= 2
+            for issue in repeat_issues:
+                if issue not in issues:
+                    issues.append(issue)
+
+        # 점수 보정
+        if issues:
+            score -= 0.5 * len(issues)
+
+        score = max(0, min(10, score))
         return score, issues[:3]
 
     except Exception as e:
         if SHOW_INTERNAL_LOG:
             print("평가 파싱 오류:", e)
+            print("LLM raw:", result)
         return 5.0, ["평가 파싱 오류"]
 
 
-def _refine_reply(user_input: str, draft: str, issues: list[str], related_memories=None) -> str:
+def _refine_reply(
+    user_input: str,
+    draft: str,
+    issues: list[str],
+    related_memories=None,
+    previous_reply: str | None = None,
+    asked_question_tags: list[str] | None = None
+) -> str:
     refine_system_prompt = f"""
-너는 상담 답변을 새로 작성하는 전문가다.
+너는 상담 답변을 개선하는 전문가다.
+초안 답변의 장점은 살리고, issues의 문제점을 참고하여 더 적절한 답변을 만들어라.
 
 [절대 규칙]
 - 반드시 반말만 사용
 - 1~3문장
 - 감정 공감 포함
 - 질문은 필요할 때만 1개
-- 같은 질문을 반복했을 시 반드시 재작성 
-- 사용자가 답했던 답변에 대하여 질문시 재작성
 
 [중요]
-기존 문장을 고치지 말고, 완전히 새로 작성하라.
+기존 답변의 장점은 유지하면서, 다음 문제를 반드시 해결하라:
+
+- 같은 의미의 질문 반복 금지
+- "무슨 일이 있었어?", "이야기해줄래?" 같은 일반 질문 금지
+- 더 구체적인 감정 표현 추가
+- 사용자 상황을 더 반영
+- 해결책을 먼저 강요하지 않는다.
+- 직전 답변과 표현이 지나치게 비슷하지 않게 수정
+- 이미 했던 핵심 질문은 다시 묻지 않기
 
 [원본 규칙]
 {SYSTEM_PROMPT}
 """
 
     memory_block = _format_related_memories(related_memories)
+    previous_reply_text = previous_reply if previous_reply else "없음"
+    asked_text = ", ".join(asked_question_tags or []) if asked_question_tags else "없음"
 
-    # issues 없을 때도 강제 규칙 부여
     if issues:
         issue_text = "\n".join(f"- {issue}" for issue in issues)
     else:
-        issue_text = """- 반드시 반말 유지
-- 1~3문장 유지
-- 감정 공감 포함
-- 더 자연스럽게 표현"""
+        issue_text = """- 표현이 단순함
+- 공감이 부족함
+- 상황 반영 부족"""
 
     refine_user_prompt = f"""{memory_block}
 
 [사용자 입력]
 {user_input}
 
-[기존 답변 초안]
+[직전 답변]
+{previous_reply_text}
+
+[이미 사용한 질문 태그]
+{asked_text}
+
+[기존 답변]
 {draft}
 
-[수정할 문제점]
+[문제점]
 {issue_text}
 
-위 문제점을 반영해서 더 나은 최종 상담 답변을 작성하라.
+위 문제를 해결해서 더 나은 답변을 작성하라.
 """
 
     return _call_chat(refine_system_prompt, refine_user_prompt, temperature=0.3)
@@ -168,8 +356,13 @@ def _has_critical_issue(text: str) -> bool:
     return bool(re.search(r"(요[.!?]?$|니다|까요|세요|겠어요)", text))
 
 
-def chat_with_counselor(user_input: str, related_memories=None) -> str:
+def chat_with_counselor(
+    user_input: str,
+    related_memories=None,
+    state: ChatState | None = None
+) -> str:
     user_input = _safe_text(user_input)
+    state = state or ChatState()
 
     memory_block = _format_related_memories(related_memories)
     user_prompt = user_input
@@ -177,24 +370,41 @@ def chat_with_counselor(user_input: str, related_memories=None) -> str:
     if memory_block:
         user_prompt = f"{memory_block}\n\n현재 사용자 말:\n{user_input}"
 
-    if SHOW_INTERNAL_LOG:  
+    if SHOW_INTERNAL_LOG:
         print("상담 LLM 호출 시작")
 
     try:
         # 1차 답변 생성
         draft = _call_chat(SYSTEM_PROMPT, user_prompt, temperature=0.5)
 
-        #  존댓말이면 무조건 1회 강제 교정
+        # 존댓말이면 1회 강제 교정
         if _has_critical_issue(draft):
-            draft = _refine_reply(user_input, draft, ["반말 아님"], related_memories)
+            draft = _refine_reply(
+                user_input=user_input,
+                draft=draft,
+                issues=["반말 아님"],
+                related_memories=related_memories,
+                previous_reply=state.prev_reply,
+                asked_question_tags=state.asked_question_tags
+            )
 
         if not DEBUG_SELF_REFINE:
+            final_tag = _extract_question_tag(draft)
+            if final_tag and final_tag not in state.asked_question_tags:
+                state.asked_question_tags.append(final_tag)
+            state.prev_reply = draft
+
             if SHOW_INTERNAL_LOG:
                 print("상담 LLM 호출 완료")
             return draft
 
         best_reply = draft
-        best_score, best_issues = _evaluate_reply(user_input, draft)
+        best_score, best_issues = _evaluate_reply(
+            user_input=user_input,
+            reply=draft,
+            previous_reply=state.prev_reply,
+            asked_question_tags=state.asked_question_tags
+        )
 
         if _has_critical_issue(draft):
             best_score = min(best_score, 5.5)
@@ -203,35 +413,62 @@ def chat_with_counselor(user_input: str, related_memories=None) -> str:
             print(f"[초안 답변] {draft}")
             print(f"[초안 점수] {best_score}")
             print(f"[초안 문제점] {best_issues}")
+            print(f"[세션 질문 태그] {state.asked_question_tags}")
 
         current_reply = draft
         current_score = best_score
-        current_issues = best_issues
+        current_issues = best_issues[:]
 
         for i in range(MAX_REFINE_ROUNDS):
             if current_score >= REFINE_THRESHOLD and not _has_critical_issue(current_reply):
                 break
 
-            refined = _refine_reply(user_input, current_reply, current_issues, related_memories)
-            refined_score, refined_issues = _evaluate_reply(user_input, refined)
+            refined = _refine_reply(
+                user_input=user_input,
+                draft=current_reply,
+                issues=current_issues,
+                related_memories=related_memories,
+                previous_reply=state.prev_reply,
+                asked_question_tags=state.asked_question_tags
+            )
+
+            refined_score, refined_issues = _evaluate_reply(
+                user_input=user_input,
+                reply=refined,
+                previous_reply=state.prev_reply,
+                asked_question_tags=state.asked_question_tags
+            )
+
+            if refined != current_reply:
+                refined_score += 0.5
 
             if _has_critical_issue(refined):
                 refined_score = min(refined_score, 5.5)
+
+            if len(refined_issues) < len(current_issues):
+                refined_score += 1.0
+
+            refined_score = max(0, min(10, refined_score))
 
             if SHOW_INTERNAL_LOG:
                 print(f"[Refine {i+1} 답변] {refined}")
                 print(f"[Refine {i+1} 점수] {refined_score}")
                 print(f"[Refine {i+1} 문제점] {refined_issues}")
 
-            # 동일 점수 덮어쓰기 방지
             if refined_score > best_score:
                 best_reply = refined
                 best_score = refined_score
-                best_issues = refined_issues
+                best_issues = refined_issues[:]
 
             current_reply = refined
             current_score = refined_score
-            current_issues = refined_issues
+            current_issues = refined_issues[:]
+
+        final_tag = _extract_question_tag(best_reply)
+        if final_tag and final_tag not in state.asked_question_tags:
+            state.asked_question_tags.append(final_tag)
+
+        state.prev_reply = best_reply
 
         if SHOW_INTERNAL_LOG:
             print("상담 LLM 호출 완료")
@@ -239,7 +476,7 @@ def chat_with_counselor(user_input: str, related_memories=None) -> str:
         return best_reply
 
     except Exception as e:
-        if SHOW_INTERNAL_LOG:  # 예외 로그 조건부 출력
+        if SHOW_INTERNAL_LOG:
             print("상담 호출 오류:", e)
         return "오늘 하루도 정말 애썼어. 지금 느끼는 마음을 너무 몰아붙이지 않았으면 좋겠어."
 
@@ -248,12 +485,19 @@ if __name__ == "__main__":
     print("상담사 AI와 대화를 시작합니다.")
     print("종료하려면 'exit'을 입력하세요.\n")
 
+    state = ChatState()
+
     while True:
-        user_text = input("나: ")
+        user_text = input("나: ").strip()
 
         if user_text.lower() == "exit":
+            state.reset()  # 상담 종료 시 세션 기록 초기화
             print("상담을 종료합니다.")
             break
 
-        reply = chat_with_counselor(user_text)
+        reply = chat_with_counselor(
+            user_input=user_text,
+            related_memories=None,
+            state=state
+        )
         print(f"\n상담사: {reply}\n")
