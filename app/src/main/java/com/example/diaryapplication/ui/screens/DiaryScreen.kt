@@ -94,7 +94,7 @@ fun DiaryScreen(
     var videoCapture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
     val scope = rememberCoroutineScope()
 
-    // val faceEmotionLog = remember { mutableStateListOf<String>() }
+    var latestVideoFile by remember { mutableStateOf<File?>(null) }
 
     // 카메라 권한 요청 런처
     // 사용자가 허용 및 거부를 하면 결과를 granted로 들어옴 -> true or false
@@ -128,9 +128,7 @@ fun DiaryScreen(
                     when(event) {
                         is VideoRecordEvent.Finalize -> {
                             if(!event.hasError()) {
-                                scope.launch {
-                                    diaryViewModel.sendVideoToServer(tempFile, diaryText, selectedDate) // 서버에 전송 후 삭제
-                                }
+                                latestVideoFile = tempFile
                             } else {
                                 tempFile.delete()
                             }
@@ -439,6 +437,7 @@ fun DiaryScreen(
                         bestThing = bestThing,
                         regretThing = regretThing,
                         imageUri = selectedImageUri,
+                        videoFile = latestVideoFile,
                         onSuccess = {}
                     )
                 },

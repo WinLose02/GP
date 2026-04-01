@@ -17,8 +17,6 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
     // DiaryRepository 선언
     private val repository = DiaryRepository()
 
-    private val faceEmotionLog = mutableListOf<String>()
-
 
     val isLoading = MutableStateFlow(false) // 로딩 중 여부
     val errorMessage = MutableStateFlow<String?>(null) // 에러 메시지
@@ -82,6 +80,7 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
         bestThing: String,
         regretThing: String,
         imageUri: Uri?,
+        videoFile: File?,
         onSuccess: () -> Unit
     ) {
         val uid = repository.currentUid ?: return
@@ -99,13 +98,6 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
                     currentDiary.value?.imageUrl?:""
                 }
 
-                val finalEmotion = faceEmotionLog
-                    .groupingBy { it }
-                    .eachCount()
-                    .maxByOrNull{it.value}
-                    ?.key ?:""
-
-                val emotionEmoji = getEmotionEmoji(finalEmotion)
 
                 val data = hashMapOf<String, Any>(
                     "user_id" to uid,
@@ -118,7 +110,7 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
                     "best_thing" to bestThing,
                     "regret_thing" to regretThing,
                     "image_url" to imageUrl,
-                    "emotion_emoji" to emotionEmoji, // TODO: 감정 분석 모델의 값을 받아와 여기에 들어가기
+                    "emotion_emoji" to "", // TODO: 감정 분석 모델의 값을 받아와 여기에 들어가기
                     "updated_at" to Timestamp.now()
                 )
 
@@ -128,16 +120,10 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
                     // 기존 일기 수정
                     repository.updateDiary(existing.id, data)
 
-                    if(finalEmotion.isNotEmpty()) {
-                        repository.saveEmotionResult(existing.id, finalEmotion)
-                    }
-
                 } else { // 기존에 일기가 없다면, 일기를 새로 작성
                     data["created_at"] = Timestamp.now()
-                    val newId = repository.addDiary(data)
-                    if(finalEmotion.isNotEmpty()) {
-                        repository.saveEmotionResult(newId, finalEmotion)
-                    }
+                    repository.addDiary(data)
+
                 }
 
                 isSaveSuccess.value = true // 저장 성공 시, 성공 상태로 변경
@@ -146,33 +132,24 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
                 loadMonthEmojis(date.year, date.monthValue) // 달력 이모지 업데이트
                 loadMonthStreak() // 일기를 저장 후에 스트릿 데이터도 업데이트
                 onSuccess()
+
+                if(videoFile!= null) {
+                    val emotion = repository.sendVideoToServer(
+                        videoFile,
+                        content,
+                        uid,
+                        dateStr
+                    )
+                    if(emotion != null) {
+                        delay(3000L)
+                        loadEmotionAndUpdate(date)
+                    }
+                }
             } catch (e: Exception) {
                 errorMessage.value = "저장에 실패했습니다: ${e.message}"
             } finally {
                 isLoading.value = false
             }
-        }
-    }
-
-
-    fun sendVideoToServer(videoFile: File, diaryText : String, date: LocalDate) {
-
-        val uid = repository.currentUid ?: return
-
-        viewModelScope.launch {
-            val emotion = repository.sendVideoToServer(
-                videoFile,
-                diaryText,
-                uid,
-                date.toString())
-
-            if (emotion != null) {
-                faceEmotionLog.add(emotion)
-            }
-
-            // 서버가 감정 분석을 완료 대기 후에 결과를 읽어옴
-            delay(3000L)
-            loadEmotionAndUpdate(date)
         }
     }
 
