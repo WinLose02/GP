@@ -28,6 +28,10 @@ class ReportViewModel : ViewModel() { // ViewModel을 상속받아 ReportViewMod
     val monthlyTotalExercise = MutableStateFlow(0)
     val monthlyTotalStudy = MutableStateFlow(0)
 
+    // 이모지
+    val weeklyEmotions = MutableStateFlow<List<String>>(emptyList())
+    val monthlyEmotions = MutableStateFlow<List<String>>(emptyList())
+
     // AI 요약 (추후 OpenAI 연동)
     val weeklyAiSummary = MutableStateFlow<String?>(null)
     val monthlyAiSummary = MutableStateFlow<String?>(null)
@@ -54,6 +58,7 @@ class ReportViewModel : ViewModel() { // ViewModel을 상속받아 ReportViewMod
                 weeklyTotalStudy.value = data.totalStudy
                 weeklyTotalExercise.value = data.totalExercise
                 weeklyAvgExercise.value = if (data.count > 0) data.totalExercise / data.count else 0 // 일기가 없으면 0으로 나눌 수 없으므로 값은 0
+                weeklyEmotions.value = repository.getWeeklyEmotions(uid)
 
             } catch (e: Exception) {
                         // 로드 실패 시 기본값 유지
@@ -79,6 +84,8 @@ class ReportViewModel : ViewModel() { // ViewModel을 상속받아 ReportViewMod
                 monthlyTotalStudy.value = data.totalStudy
                 monthlyTotalExercise.value = data.totalExercise
                 monthlyAvgExercise.value = if (data.count > 0) data.totalExercise / data.count else 0
+                monthlyEmotions.value = repository.getMonthlyEmotions(uid)
+
             } catch (e: Exception) {
                     // 로드 실패 시 기본값 유지
             } finally {

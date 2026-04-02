@@ -146,7 +146,7 @@ class DiaryRepository {
                     .build()
 
                 val request = Request.Builder()
-                    .url("http://192.168.123.100:8000/analyze")
+                    .url("http://192.168.123.100:8080/analyze")
                     .post(requestBody)
                     .build()
 

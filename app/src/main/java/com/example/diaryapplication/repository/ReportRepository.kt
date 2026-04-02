@@ -1,5 +1,6 @@
 package com.example.diaryapplication.repository
 
+import androidx.compose.ui.window.isPopupLayout
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -97,5 +98,39 @@ class ReportRepository {
             totalExercise = totalExercise,
             count = result.size()
         )
+    }
+
+    // 이번 주 감정 이모지 불러오기 함수
+    suspend fun getWeeklyEmotions(uid: String): List<String> {
+        val today = LocalDate.now()
+        val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        val weekEnd = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))
+
+        val result = db.collection("diaries")
+            .whereEqualTo("user_id", uid)
+            .whereGreaterThanOrEqualTo("diary_date", weekStart.toString())
+            .whereLessThanOrEqualTo("diary_date", weekEnd.toString())
+            .get().await()
+
+        return result.documents.mapNotNull { doc ->
+            doc.getString("emotion_emoji") ?.takeIf { it.isNotEmpty() }
+        }
+    }
+
+    // 이번 달 감정 이모지 불러오기 함수
+    suspend fun getMonthlyEmotions(uid: String): List<String> {
+        val today = LocalDate.now()
+        val monthStart = today.withDayOfMonth(1)
+        val monthEnd = today.with(TemporalAdjusters.lastDayOfMonth())
+
+        val result = db.collection("diaries")
+            .whereEqualTo("user_id", uid)
+            .whereGreaterThanOrEqualTo("diary_date", monthStart.toString())
+            .whereLessThanOrEqualTo("diary_date", monthEnd.toString())
+            .get().await()
+
+        return result.documents.mapNotNull { doc ->
+            doc.getString("emotion_emoji") ?.takeIf { it.isNotEmpty() }
+        }
     }
 }

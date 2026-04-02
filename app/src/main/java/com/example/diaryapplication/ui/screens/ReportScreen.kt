@@ -64,6 +64,11 @@ fun ReportScreen(
     val monthlyTotalExercise by reportViewModel.monthlyTotalExercise.collectAsState()
     val monthlyTotalStudy by reportViewModel.monthlyTotalStudy.collectAsState()
 
+    // (주간/월간) 이모지
+    val weeklyEmotions by reportViewModel.weeklyEmotions.collectAsState()
+    val monthlyEmotions by reportViewModel.monthlyEmotions.collectAsState()
+    val emotions = if (isWeekly) weeklyEmotions else monthlyEmotions
+
     // TODO: AI 일기 요약 파트 (추후에 연동 작업)
     val weeklyAiSummary by reportViewModel.weeklyAiSummary.collectAsState()
     val monthlyAiSummary by reportViewModel.weeklyAiSummary.collectAsState()
@@ -138,7 +143,8 @@ fun ReportScreen(
             item {
                 EmotionSummaryCard( // 감정 요약 카드
                     title = "$periodTitle 나의 감정",
-                    emptyText = "아직 감정 기록이 없습니다"
+                    emptyText = "아직 감정 기록이 없습니다",
+                    emotions = emotions
                 )
             }
             item { // 일기 수, 평균 운동 데이터 카드
@@ -321,7 +327,7 @@ private fun PeriodCard(title: String, range: String) {
     }
 }
 @Composable
-private fun EmotionSummaryCard(title: String, emptyText: String) {
+private fun EmotionSummaryCard(title: String, emptyText: String, emotions:List<String>) {
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -330,13 +336,49 @@ private fun EmotionSummaryCard(title: String, emptyText: String) {
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(emptyText, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            if(emotions.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(emptyText, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            else {
+
+                val emotionCounts = emotions
+                    .groupingBy {it}
+                    .eachCount()
+
+                // 감정 이모지 및 횟수를 표시
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    emotionCounts.forEach { (emoji, count) ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Column (
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Text(emoji, style = MaterialTheme.typography.titleLarge)
+                                Text(
+                                    text = "${count}회",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
