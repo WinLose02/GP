@@ -1,5 +1,6 @@
 package com.example.diaryapplication.ui.screens
 
+import android.graphics.Paint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,12 +11,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.diaryapplication.viewmodel.ChatViewModel
 import com.example.diaryapplication.viewmodel.ChatMessage
@@ -33,6 +37,9 @@ fun ChatScreen(
 
     // 채팅 메시지를 모아놓는 List
     val messages by chatViewModel.messages.collectAsState()
+
+    // 가이드 버튼 표시 여부
+    var showGuideButtons by remember { mutableStateOf(true) }
 
     // 텍스트 필드에 입력된 텍스트 상태 (입력시 값이 업데이트)
     val input by chatViewModel.inputText.collectAsState()
@@ -73,7 +80,20 @@ fun ChatScreen(
                         Sender.USER -> UserBubble(text = msg.text, time = msg.time) // 사용자 메시지이면 오른쪽 파란 말풍선
                     }
                 }
+
             }
+        }
+
+        // 가이드 버튼
+        if (showGuideButtons) {
+            GuideButtons(
+                onButtonClick = { text ->
+                    showGuideButtons = false // 버튼 클릭 시 가이드 버튼을 숨김
+                    chatViewModel.onInputChange(text)
+                    chatViewModel.sendMessage()
+                }
+            )
+            Spacer(Modifier.height(8.dp))
         }
 
         Spacer(Modifier.height(10.dp))
@@ -233,6 +253,111 @@ private fun ChatInputBar(
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
+        }
+    }
+}
+
+// 가이드 버튼 디자인
+@Composable
+private fun GuideButtons (
+    onButtonClick : (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "어떤 도움이 필요하신가요?",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 감정 상담 버튼
+            GuideButton(
+                modifier = Modifier.weight(1f),
+                emoji = "💬",
+                title = "감정 상담",
+                subtitle = "고민이나 감정\n털어놓기",
+                //borderColor = Color(0xFFD85A30),
+                //titleColor = Color(0xFF993C1D),
+                onClick = { onButtonClick ("감정 상담을 받고 싶어!") }
+            )
+
+            // 음악 추천 버튼
+            GuideButton(
+                modifier = Modifier.weight(1f),
+                emoji = "🎵",
+                title = "음악 추천",
+                subtitle = "감정에 맞는 음악\n추천 받기",
+                //borderColor = Color(0xFF1D9E75),
+                //titleColor = Color(0xFF0F6E56),
+                onClick = { onButtonClick ("감정에 맞는 음악을 추천해줘.") }
+            )
+
+            // 활동 추천 버튼
+            GuideButton(
+                modifier = Modifier.weight(1f),
+                emoji = "✨",
+                title = "활동 추천",
+                subtitle = "기분에 맞는 활동\n추천 받기",
+                //borderColor = Color(0xFF7F77DD),
+                //titleColor = Color(0xFF534AB7),
+                onClick = { onButtonClick ("기분에 맞는 활동을 추천해줘.") }
+            )
+
+        }
+    }
+}
+
+// 개별 가이드 버튼
+@Composable
+private fun GuideButton(
+    modifier : Modifier = Modifier,
+    emoji : String,
+    title : String,
+    subtitle: String,
+    //borderColor: Color,
+    //titleColor : Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable { onClick () },
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(
+            width = 0.5. dp ,
+            color = MaterialTheme.colorScheme.outline.copy(alpha= 0.3f))
+    ) {
+        Column(
+          modifier = Modifier.padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = emoji,
+                fontSize = 20.sp
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 14.sp
+            )
         }
     }
 }

@@ -187,7 +187,7 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
             "분노" -> "😠"
             "불안" -> "😰"
             "당황" -> "😳"
-            else   -> ""
+            else   -> "❎"
         }
     }
 

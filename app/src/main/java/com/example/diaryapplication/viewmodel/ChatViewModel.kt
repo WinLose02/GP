@@ -9,6 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import com.example.diaryapplication.repository.ChatRepository
+import java.time.LocalDate
 
 enum class Sender { BOT, USER }
 
@@ -83,9 +84,22 @@ class ChatViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val response = repository.sendToChatServer(text)
+                val uid = repository.currentUid ?: ""
+                val date = LocalDate.now().toString()
+                val response = repository.sendToChatServer(
+                    text = text,
+                    uid = uid,
+                    date = date
+                )
+
                 removeMessage(loadingId)
-                addBotMessage(response)
+
+                addBotMessage(
+                    "[${response.emotionLabel}] 감정이 느껴졌어요.\n\n" +
+                    "${response.counsel}\n\n" +
+                    "✨ ${response.fortune} "
+                )
+
             } catch (e: Exception) {
                 removeMessage(loadingId)
                 addBotMessage("죄송합니다, 잠시 후 다시 시도해주세요")

@@ -511,7 +511,8 @@ private fun CalendarGrid(
                 for (col in 0 until 7) {
                     val dayNumber = week * 7 + col - firstDowIndex + 1
                     val date = if (dayNumber in 1..daysInMonth) yearMonth.atDay(dayNumber) else null
-                    val enabled = date != null && (date == today || date == yesterday)
+                    val enabled = date != null &&
+                            (date == today || date == yesterday || date.isBefore(today) && emotionEmojiByDate.containsKey(date))
                     CalendarCell(
                         date = date,
                         isSelected = date == selectedDate,

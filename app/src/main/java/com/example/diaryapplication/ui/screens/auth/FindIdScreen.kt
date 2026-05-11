@@ -33,6 +33,10 @@ fun FindIdScreen(
     val loading by viewModel.isLoading.collectAsState()
     val error by viewModel.errorMessage.collectAsState()
 
+    // 캘린더 다이얼로그를 위한 변수
+    var showPicker by remember { mutableStateOf(false) }
+    val pickerState = rememberDatePickerState()
+
 
     // 화면 기본 틀 디자인
     Scaffold(
@@ -72,7 +76,11 @@ fun FindIdScreen(
                 placeholder = "연도-월-일",
                 containerColor = AppFieldColor,
                 readOnly = true,
-                trailing = { Icon(Icons.Outlined.DateRange, null) } // 오른쪽 끝에 달력 아이콘을 표시
+                trailing = {
+                    IconButton(onClick = { showPicker = true }) {
+                        Icon(Icons.Outlined.DateRange, null)
+                    }
+                } // 오른쪽 끝에 달력 아이콘을 표시
             )
 
             Spacer(Modifier.height(8.dp))
@@ -102,6 +110,30 @@ fun FindIdScreen(
                 enabled = !loading, // 중복 클릭 방지를 위해 버튼을 비활성화
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+
+    if(showPicker) {
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val millis = pickerState.selectedDateMillis
+                    if (millis != null) {
+                        val dateform = java.text.SimpleDateFormat(
+                            "yyyy-MM-dd",
+                            java.util.Locale.getDefault()
+                        )
+                        birth = dateform.format(java.util.Date(millis))
+                    }
+                    showPicker = false
+                }) { Text("완료")}
+            },
+            dismissButton =  {
+                TextButton(onClick = { showPicker = false}) { Text("취소")}
+            }
+        ) {
+            DatePicker(state = pickerState)
         }
     }
 }
