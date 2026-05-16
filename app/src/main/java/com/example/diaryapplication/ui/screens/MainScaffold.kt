@@ -158,7 +158,8 @@ fun MainScaffold(onLogout: () -> Unit) {
             composable(Route.Diary.path) {
                 DiaryScreen(
                     padding = inner,
-                    diaryViewModel = diaryViewModel
+                    diaryViewModel = diaryViewModel,
+                    myPageViewModel = myPageViewModel
                     )
             }
             composable(Route.Chat.path) {

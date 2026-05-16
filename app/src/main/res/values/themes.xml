@@ -2,8 +2,13 @@
 <resources>
 
     <style name="Theme.DiaryApplication" parent="android:Theme.Material.Light.NoActionBar">
-
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
+
+    <style name="Theme.DiaryApplication.Launcher">
+        <item name="android:windowBackground">@drawable/mood_on_background</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/white</item>
+    </style>
+
 </resources>

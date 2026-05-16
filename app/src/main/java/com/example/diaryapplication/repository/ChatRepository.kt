@@ -6,7 +6,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -22,11 +21,10 @@ data class ChatResponse (
     val counsel : String
 )
 
-
 class ChatRepository {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
-    private val serverUrl = "http://192.168.125.1:8000" // 챗봇 서버 IP 및 Port 번호
+    private val serverUrl = "http://192.168.123.104:8000"
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -45,7 +43,8 @@ class ChatRepository {
     suspend fun sendToChatServer(
         text: String,
         uid : String,
-        date:String
+        date:String,
+        relatedMemories: List<Map<String, String>> = emptyList()
     ): ChatResponse {
         return withContext(Dispatchers.IO) {
 
@@ -53,6 +52,9 @@ class ChatRepository {
                 put("user_id", uid)
                 put("content", text)
                 put("date", date)
+                put("related_memories", org.json.JSONArray(
+                    relatedMemories.map { org.json.JSONObject(it as Map<*, *>) }
+                ))
             }.toString().toRequestBody("application/json".toMediaType())
 
             val request = Request.Builder()
@@ -83,6 +85,29 @@ class ChatRepository {
             } else {
                 throw Exception("서버 오류: ${response.code}")
             }
+        }
+    }
+
+    suspend fun getRecentEmotionLogs(uid: String) : List<Map<String, String>> {
+        val result = db.collection("diaries")
+            .whereEqualTo("user_id", uid)
+            .orderBy("diary_date", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(5)
+            .get().await()
+
+        return result.documents.mapNotNull { doc ->
+            val date = doc.getString("diary_date") ?: return@mapNotNull null
+            val summary = doc.getString("summary") ?: return@mapNotNull null
+            val emotionDoc = db.collection("diaries").document(doc.id)
+                .collection("emotion_result").document("result")
+                .get().await()
+            val finalEmotion = emotionDoc.getString("final_emotion") ?: ""
+
+            mapOf(
+                "date" to date,
+                "summary" to summary,
+                "tags" to finalEmotion  // "기쁨", "슬픔" 등 텍스트
+            )
         }
     }
 }

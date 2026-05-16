@@ -1,6 +1,5 @@
 package com.example.diaryapplication.ui.screens
 
-import android.graphics.Paint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,18 +10,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.*
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.diaryapplication.viewmodel.ChatViewModel
-import com.example.diaryapplication.viewmodel.ChatMessage
 import com.example.diaryapplication.viewmodel.Sender
 import com.example.diaryapplication.ui.theme.ChatBubbleGray
 import com.example.diaryapplication.ui.theme.ChatInputGray
@@ -38,13 +40,26 @@ fun ChatScreen(
     // 채팅 메시지를 모아놓는 List
     val messages by chatViewModel.messages.collectAsState()
 
-    // 가이드 버튼 표시 여부
-    var showGuideButtons by remember { mutableStateOf(true) }
+    // 상담 종료 여부
+    var isCounselingEnd by remember { mutableStateOf(false) }
 
+    val listState = rememberLazyListState()
+
+    // 메시지 추가시 마다 맨 아래로 스크롤
+    LaunchedEffect(messages.size) {
+        if(messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
     // 텍스트 필드에 입력된 텍스트 상태 (입력시 값이 업데이트)
     val input by chatViewModel.inputText.collectAsState()
 
     val isSending by chatViewModel.isSending.collectAsState()
+
+    // fortune 메시지 상태
+    val fortune by chatViewModel.fortuneMessage.collectAsState()
+
+    val summary by chatViewModel.summaryMessage.collectAsState()
 
 
     Column(
@@ -52,7 +67,7 @@ fun ChatScreen(
             .fillMaxSize()
             .padding(padding)
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp , vertical = 12.dp)
     ) {
         ChatHeaderCard( // 상단에 챗봇 프로필 표시 부분
             title = "감정 챗봇",
@@ -70,6 +85,7 @@ fun ChatScreen(
                 .weight(1f) // 입력창을 제외한 나머지 모든 부분
         ) {
             LazyColumn( // 메시지가 많을 경우, 보이는 것만 렌더링 -> 쉽게 말해 스크롤 할 수 있게 -> 성능 개선을 위함도 있다고 함
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp) // 메시지와 메시지 사이의 간격을 지정
@@ -81,29 +97,64 @@ fun ChatScreen(
                     }
                 }
 
+                // 상담 종료 후 fortune 메시지 표시
+                if(isCounselingEnd && fortune.isNotEmpty()) {
+                    item {
+                        FortuneMessage(text = fortune)
+                    }
+                }
+
             }
         }
 
-        // 가이드 버튼
-        if (showGuideButtons) {
-            GuideButtons(
-                onButtonClick = { text ->
-                    showGuideButtons = false // 버튼 클릭 시 가이드 버튼을 숨김
-                    chatViewModel.onInputChange(text)
-                    chatViewModel.sendMessage()
+        // 상담 마치기 버튼
+        if(!isCounselingEnd) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(
+                        0.5.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha=0.3f)
+                    ),
+                    modifier = Modifier.clickable{
+                        isCounselingEnd = true
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "상담 마치기",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            )
+            }
             Spacer(Modifier.height(8.dp))
         }
+
 
         Spacer(Modifier.height(10.dp))
 
         ChatInputBar(
-            value = input, // 현재 입력된 텍스트
-            onValueChange = { chatViewModel.onInputChange(it) }, // 텍스트를 입력할 때마다 위의 input 값을 업데이트
+            value = if(isCounselingEnd) "" else input, // 현재 입력된 텍스트
+            onValueChange = { if(!isCounselingEnd) chatViewModel.onInputChange(it) }, // 텍스트를 입력할 때마다 위의 input 값을 업데이트
             onSend = { // 전송 버튼을 누르면
-            chatViewModel.sendMessage() },
-            enabled = !isSending
+            if(!isCounselingEnd) chatViewModel.sendMessage() },
+            enabled = !isSending && !isCounselingEnd
         )
     }
 }
@@ -257,107 +308,36 @@ private fun ChatInputBar(
     }
 }
 
-// 가이드 버튼 디자인
+// FortuneMessage
 @Composable
-private fun GuideButtons (
-    onButtonClick : (String) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+private fun FortuneMessage(text : String){
+    Column (
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.Start
     ) {
-        Text(
-            text = "어떤 도움이 필요하신가요?",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Surface(
+            shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
+            color = Color(0xFFEAF3DE),
+            border = BorderStroke(0.5.dp, Color(0xFFC0DD97)),
+            modifier = Modifier.widthIn(max = 300.dp)
         ) {
-            // 감정 상담 버튼
-            GuideButton(
-                modifier = Modifier.weight(1f),
-                emoji = "💬",
-                title = "감정 상담",
-                subtitle = "고민이나 감정\n털어놓기",
-                //borderColor = Color(0xFFD85A30),
-                //titleColor = Color(0xFF993C1D),
-                onClick = { onButtonClick ("감정 상담을 받고 싶어!") }
-            )
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    text =  "오늘의 포츈쿠키",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF3B6D11),
+                    fontWeight = FontWeight.SemiBold
+                )
 
-            // 음악 추천 버튼
-            GuideButton(
-                modifier = Modifier.weight(1f),
-                emoji = "🎵",
-                title = "음악 추천",
-                subtitle = "감정에 맞는 음악\n추천 받기",
-                //borderColor = Color(0xFF1D9E75),
-                //titleColor = Color(0xFF0F6E56),
-                onClick = { onButtonClick ("감정에 맞는 음악을 추천해줘.") }
-            )
+                Spacer(Modifier.height(6.dp))
 
-            // 활동 추천 버튼
-            GuideButton(
-                modifier = Modifier.weight(1f),
-                emoji = "✨",
-                title = "활동 추천",
-                subtitle = "기분에 맞는 활동\n추천 받기",
-                //borderColor = Color(0xFF7F77DD),
-                //titleColor = Color(0xFF534AB7),
-                onClick = { onButtonClick ("기분에 맞는 활동을 추천해줘.") }
-            )
-
-        }
-    }
-}
-
-// 개별 가이드 버튼
-@Composable
-private fun GuideButton(
-    modifier : Modifier = Modifier,
-    emoji : String,
-    title : String,
-    subtitle: String,
-    //borderColor: Color,
-    //titleColor : Color,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier.clickable { onClick () },
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(
-            width = 0.5. dp ,
-            color = MaterialTheme.colorScheme.outline.copy(alpha= 0.3f))
-    ) {
-        Column(
-          modifier = Modifier.padding(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = emoji,
-                fontSize = 20.sp
-            )
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                lineHeight = 14.sp
-            )
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF27500A),
+                    lineHeight = 18.sp
+                )
+            }
         }
     }
 }

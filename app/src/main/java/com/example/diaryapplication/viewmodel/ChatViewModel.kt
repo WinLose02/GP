@@ -30,6 +30,8 @@ class ChatViewModel : ViewModel() {
     // ─────────────────────────────────────────
     // 채팅 메시지 목록
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    private var recentEmotionLogs : List<Map<String, String>> = emptyList()
+
     val messages = _messages.asStateFlow()
 
     // 입력창 텍스트
@@ -38,8 +40,14 @@ class ChatViewModel : ViewModel() {
     // 전송 중 여부 (전송 중에는 버튼 비활성화)
     val isSending = MutableStateFlow(false)
 
+    // fortune 메시지
+    val fortuneMessage = MutableStateFlow("")
+
+    val summaryMessage = MutableStateFlow("")
+
     init {
         loadWelcomeMessage()
+        //loadRecentEmotionLogs()
     }
 
     // ─────────────────────────────────────────
@@ -60,6 +68,17 @@ class ChatViewModel : ViewModel() {
                 )
             } catch (e: Exception) {
                 addBotMessage("안녕하세요! 😊\n오늘 하루는 어떠셨나요?")
+            }
+        }
+    }
+
+    private fun loadRecentEmotionLogs(){
+        val uid = repository.currentUid ?: return
+        viewModelScope.launch {
+            try {
+                recentEmotionLogs = repository.getRecentEmotionLogs(uid)
+            } catch (e: Exception) {
+                // 실패해도 빈 리스트로 동작
             }
         }
     }
@@ -89,16 +108,14 @@ class ChatViewModel : ViewModel() {
                 val response = repository.sendToChatServer(
                     text = text,
                     uid = uid,
-                    date = date
+                    date = date,
+                    relatedMemories = recentEmotionLogs
                 )
 
                 removeMessage(loadingId)
 
-                addBotMessage(
-                    "[${response.emotionLabel}] 감정이 느껴졌어요.\n\n" +
-                    "${response.counsel}\n\n" +
-                    "✨ ${response.fortune} "
-                )
+                addBotMessage("${response.counsel}")
+                fortuneMessage.value = response.fortune
 
             } catch (e: Exception) {
                 removeMessage(loadingId)
@@ -134,7 +151,7 @@ class ChatViewModel : ViewModel() {
         _messages.value = _messages.value + ChatMessage(
             id = id,
             sender = Sender.BOT,
-            text = "...",
+            text = ". . .",
             time = now(),
             isLoading = true
         )

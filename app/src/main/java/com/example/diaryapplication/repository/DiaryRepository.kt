@@ -15,6 +15,8 @@ import java.io.File
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import com.example.diaryapplication.model.DiaryEntry
+import com.example.diaryapplication.repository.ChatResponse
+
 
 class DiaryRepository {
     private val auth = FirebaseAuth.getInstance()
@@ -146,7 +148,7 @@ class DiaryRepository {
                     .build()
 
                 val request = Request.Builder()
-                    .url("http://192.168.123.100:8080/analyze")
+                    .url("http://192.168.123.104:8080/analyze")
                     .post(requestBody)
                     .build()
 
@@ -163,6 +165,15 @@ class DiaryRepository {
                 if (videoFile.exists()) videoFile.delete() // 임시 파일 삭제
             }
         }
+    }
+
+    // 일기 요약을 저장하는 함수
+    suspend fun saveSummary(diaryId : String, summary : String , keywords : List<String>){
+        db.collection("diaries").document(diaryId)
+            .update(mapOf(
+                "summary" to summary,
+                "keywords" to keywords
+            )).await()
     }
 
     // 서버에서 저장한 emotion_result값을 읽는 함수

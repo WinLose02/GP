@@ -133,4 +133,42 @@ class ReportRepository {
             doc.getString("emotion_emoji") ?.takeIf { it.isNotEmpty() }
         }
     }
+
+    // 이번 주 일기 요약
+    suspend fun getWeeklySummaries(uid: String) : List<Pair<String, String>> {
+        val today = LocalDate.now()
+        val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        val weekEnd = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))
+
+        val result = db.collection("diaries")
+            .whereEqualTo("user_id", uid)
+            .whereGreaterThanOrEqualTo("diary_date", weekStart.toString())
+            .whereLessThanOrEqualTo("diary_date", weekEnd.toString())
+            .get().await()
+
+        return result.documents.mapNotNull { doc ->
+            val date = doc.getString("diary_date") ?: return@mapNotNull null
+            val summary = doc.getString("summary") ?: return@mapNotNull null
+            if (summary.isNotEmpty()) Pair(date, summary) else null
+        }.sortedBy { it.first }
+    }
+
+    // 이번 달 일기 요약
+    suspend fun getMonthlySummaries(uid: String) : List<Pair<String, String>> {
+        val today = LocalDate.now()
+        val monthStart = today.withDayOfMonth(1)
+        val monthEnd = today.with(TemporalAdjusters.lastDayOfMonth())
+
+        val result = db.collection("diaries")
+            .whereEqualTo("user_id", uid)
+            .whereGreaterThanOrEqualTo("diary_date", monthStart.toString())
+            .whereLessThanOrEqualTo("diary_date", monthEnd.toString())
+            .get().await()
+
+        return result.documents.mapNotNull { doc ->
+            val date = doc.getString("diary_date") ?: return@mapNotNull null
+            val summary = doc.getString("summary") ?: return@mapNotNull null
+            if (summary.isNotEmpty()) Pair(date, summary) else null
+        }.sortedBy { it.first }
+    }
 }

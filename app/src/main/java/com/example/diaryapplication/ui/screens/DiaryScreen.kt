@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -30,6 +29,7 @@ import com.example.diaryapplication.ui.components.SoftOutlinedTextField
 import com.example.diaryapplication.ui.theme.AppFieldColor
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.diaryapplication.viewmodel.DiaryViewModel
+import com.example.diaryapplication.viewmodel.MyPageViewModel
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -44,10 +44,12 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.video.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.io.File
-
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.launch
 
 // 날씨 타입
 private enum class WeatherType(val label: String, val icon: @Composable () -> Unit) {
@@ -56,10 +58,12 @@ private enum class WeatherType(val label: String, val icon: @Composable () -> Un
     RAIN("비", { Icon(Icons.Outlined.WaterDrop, contentDescription = null) }),
     SNOW("눈", { Icon(Icons.Outlined.AcUnit, contentDescription = null) }),
 }
+
 @Composable
 fun DiaryScreen(
     padding: PaddingValues, // 여백값
-    diaryViewModel: DiaryViewModel = viewModel() // DB 통신을 위한 ViewModel
+    diaryViewModel: DiaryViewModel = viewModel(), // DB 통신을 위한 ViewModel
+    myPageViewModel: MyPageViewModel = viewModel()
 ) {
 
     val today = remember { LocalDate.now() } // 오늘 날짜
@@ -71,6 +75,20 @@ fun DiaryScreen(
     val currentDiary by diaryViewModel.currentDiary.collectAsState()
     val emotionEmojiMap by diaryViewModel.emotionEmojiMap.collectAsState()
 
+    // PIN 관련
+    val pinEnabled by myPageViewModel.pinEnabled.collectAsState()
+    val savedPin by myPageViewModel.savedPin.collectAsState()
+    var isPinVerified by remember { mutableStateOf(false) }
+
+    // PIN 설정되어 있고 인증을 하지 않았으면 PIN 입력 화면 표시
+    if (pinEnabled && !isPinVerified) {
+        PinLockScreen(
+            savedPin = savedPin ?: "",
+            onSuccess = { isPinVerified = true }
+        )
+        return
+    }
+
     // 입력 상태
     var diaryText by remember { mutableStateOf("") } // 일기 내용
     var routineText by remember { mutableStateOf("") } // 하루 일과
@@ -79,6 +97,8 @@ fun DiaryScreen(
     var weather by remember { mutableStateOf(WeatherType.SUNNY) } // 선택된 날씨 (디폴트: 맑음)
     var exerciseMin by remember { mutableIntStateOf(0) } // 운동 시간
     var studyMin by remember { mutableIntStateOf(0) } // 공부 시간
+
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) } // 선택된 사진의 경로 (null이면 사진 X)
 
     // 카메라 관련 변수들을 선언
     val context = LocalContext.current
@@ -109,38 +129,57 @@ fun DiaryScreen(
          cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
      }
 
+    // 현재 녹화 객체를 저장 (저장 버튼 클릭 시, 종료하기 위함)
+    var activeRecording by remember { mutableStateOf<Recording?>(null) }
+    var recordedFile by remember { mutableStateOf<File?>(null) }
+    var saveRequested by remember { mutableStateOf(false) }
+
     LaunchedEffect(videoCapture) {
         val vc = videoCapture ?: return@LaunchedEffect
 
-        while(true){
-            // cacheDir에 임시로 파일을 생성(갤러리에 저장은X)
-            val tempFile = File(
-                context.cacheDir,
-                "faceVideo_${System.currentTimeMillis()}.mp4"
-            )
 
-            val fileOutput = FileOutputOptions.Builder(tempFile).build()
+        // 파일 생성
+        val tempFile = File(
+            context.cacheDir,
+            "faceVideo_${System.currentTimeMillis()}.mp4"
+        )
 
-            // 녹화를 시작
-            val recording = vc.output
-                .prepareRecording(context, fileOutput)
-                .start(ContextCompat.getMainExecutor(context)) { event ->
-                    when(event) {
-                        is VideoRecordEvent.Finalize -> {
-                            if(!event.hasError()) {
-                                latestVideoFile = tempFile
-                            } else {
-                                tempFile.delete()
-                            }
+        val fileOutput = FileOutputOptions.Builder(tempFile).build()
+
+        // 녹화를 시작
+        val recording = vc.output
+            .prepareRecording(context, fileOutput)
+            .start(ContextCompat.getMainExecutor(context)) { event ->
+                when(event) {
+                    is VideoRecordEvent.Finalize -> {
+                        if(!event.hasError()) {
+                            recordedFile = tempFile // 녹화 완료 시 파일 저장
+                        } else {
+                            tempFile.delete()
                         }
-                        else -> {}
+                        if(saveRequested) {
+                            saveRequested = false
+                            diaryViewModel.saveDiary(
+                                date = selectedDate,
+                                content = diaryText,
+                                weather = weather.name,
+                                exerciseMin = exerciseMin,
+                                studyMin = studyMin,
+                                routine = routineText,
+                                bestThing = bestThing,
+                                regretThing = regretThing,
+                                imageUri = selectedImageUri,
+                                videoFile = if(!event.hasError()) tempFile else null,
+                                onSuccess = {}
+                            )
+                        }
                     }
+                    else -> {}
                 }
+            }
 
-            delay(5000L) // 5초 대기
-            recording.stop()
-            delay(5000L) // 다음 녹화 전 대기
-        }
+        activeRecording = recording // 녹화 객체 저장
+
     }
 
 
@@ -150,10 +189,14 @@ fun DiaryScreen(
     }
     LaunchedEffect(selectedDate) { // selectedDate가 바뀔때마다 해당 날짜의 일기를 불러옴
         diaryViewModel.loadDiary(selectedDate)
+
+        // 날짜 변경 시에 진행 중인 녹화는 중지해야 함
+        activeRecording?.stop()
+        activeRecording = null
+        recordedFile = null
     }
 
     // 사진 선택
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) } // 선택된 사진의 경로 (null이면 사진 X)
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri -> selectedImageUri = uri } // 사진 선택 완료 시, 사진의 URI 저장
@@ -190,6 +233,7 @@ fun DiaryScreen(
     val isSaveSuccess by diaryViewModel.isSaveSuccess.collectAsState() // 일기가 저장되었는지 여부 -> True, False
     LaunchedEffect(isSaveSuccess) { // 일기가 저장 되었으면
         if (isSaveSuccess) snackbarHostState.showSnackbar("일기가 저장되었습니다 ✅") // 스낵바 메시지 출력
+        diaryViewModel.loadMonthEmojis(selectedDate.year, selectedDate.monthValue)
     }
 
 
@@ -425,21 +469,26 @@ fun DiaryScreen(
             PrimaryPillButton(
                 text = if (isLoading) "저장 중 . . . " else "일기 저장하기",
                 onClick = {
-                    // TODO:  AI 감정 분석
-                    // faceEmotionLog를 활용해서 감정을 결정
-                    diaryViewModel.saveDiary(
-                        date = selectedDate,
-                        content = diaryText,
-                        weather = weather.name,
-                        exerciseMin = exerciseMin,
-                        studyMin = studyMin,
-                        routine = routineText,
-                        bestThing = bestThing,
-                        regretThing = regretThing,
-                        imageUri = selectedImageUri,
-                        videoFile = latestVideoFile,
-                        onSuccess = {}
-                    )
+                    if(activeRecording!= null) {
+
+                    saveRequested = true
+                    activeRecording?.stop()
+                    activeRecording = null
+                    } else {
+                        diaryViewModel.saveDiary(
+                            date = selectedDate,
+                            content = diaryText,
+                            weather = weather.name,
+                            exerciseMin = exerciseMin,
+                            studyMin = studyMin,
+                            routine = routineText,
+                            bestThing = bestThing,
+                            regretThing = regretThing,
+                            imageUri = selectedImageUri,
+                            videoFile = recordedFile,
+                            onSuccess = {}
+                        )
+                    }
                 },
                 enabled = !isLoading,
                 modifier = Modifier
@@ -467,6 +516,7 @@ private fun InfoBanner(text: String) {
         )
     }
 }
+
 // 달력 배너
 @Composable
 private fun CalendarHeader(yearMonth: YearMonth, onPrev: () -> Unit, onNext: () -> Unit) {
@@ -480,6 +530,7 @@ private fun CalendarHeader(yearMonth: YearMonth, onPrev: () -> Unit, onNext: () 
         IconButton(onClick = onNext) { Icon(Icons.Outlined.ChevronRight, contentDescription = null) }
     }
 }
+
 // 달력 그리드
 @Composable
 private fun CalendarGrid(
@@ -526,6 +577,7 @@ private fun CalendarGrid(
         }
     }
 }
+
 // 달력 셀
 @Composable
 private fun CalendarCell(
@@ -558,6 +610,7 @@ private fun CalendarCell(
         }
     }
 }
+
 // 날씨 선택
 @Composable
 private fun WeatherRow(selected: WeatherType, onSelect: (WeatherType) -> Unit) {
@@ -590,6 +643,7 @@ private fun WeatherRow(selected: WeatherType, onSelect: (WeatherType) -> Unit) {
         }
     }
 }
+
 // 일기 작성 도우미
 @Composable
 private fun HelperCard(
@@ -835,4 +889,128 @@ private fun dowIndexSundayStart(dow: DayOfWeek): Int = when (dow) {
 private fun formatKoreanDate(date: LocalDate): String {
     val dayName = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, Locale.KOREAN)
     return "${date.year}년 ${date.monthValue}월 ${date.dayOfMonth}일 ($dayName)"
+}
+
+@Composable
+private fun PinLockScreen (
+    savedPin : String,
+    onSuccess : () -> Unit
+) {
+    var inputPin by remember { mutableStateOf("") }
+    var isError by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            modifier = Modifier.padding(32.dp)
+        ) {
+            // 자물쇠 아이콘
+            Icon(
+                Icons.Outlined.Lock,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+
+            Text(
+                text = "PIN 번호를 입력하세요",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            // PIN 입력 표시 (**** 형태)
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                repeat(savedPin.length) { i ->
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .background(
+                                color = if (i < inputPin.length)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                shape = CircleShape
+                            )
+                    )
+                }
+            }
+
+            // 오류 메시지
+            if (isError) {
+                Text(
+                    text = "PIN 번호가 일치하지 않습니다",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            // 숫자 키패드
+            val keys = listOf(
+                listOf("1", "2", "3"),
+                listOf("4", "5", "6"),
+                listOf("7", "8", "9"),
+                listOf("", "0", "⌫")
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                keys.forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        row.forEach { key ->
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        color = if (key.isEmpty()) Color.Transparent
+                                        else MaterialTheme.colorScheme.surface,
+                                        shape = CircleShape
+                                    )
+                                    .clickable(enabled = key.isNotEmpty()) {
+                                        when (key) {
+                                            "⌫" -> {
+                                                if (inputPin.isNotEmpty()) {
+                                                    inputPin = inputPin.dropLast(1)
+                                                    isError = false
+                                                }
+                                            }
+
+                                            else -> {
+                                                if (inputPin.length < savedPin.length) {
+                                                    inputPin += key
+                                                    isError = false
+                                                    // 비밀버호 자리수 확인
+                                                    if (inputPin.length == savedPin.length) {
+                                                        if (inputPin == savedPin) {
+                                                            onSuccess()
+                                                        } else {
+                                                            isError = true
+                                                            inputPin = ""
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (key.isNotEmpty()) {
+                                    Text(
+                                        text = key,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

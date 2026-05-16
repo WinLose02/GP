@@ -28,6 +28,7 @@ import androidx.compose.foundation.clickable
 import com.example.diaryapplication.viewmodel.MyPageViewModel
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.diaryapplication.notification.NotificationHelper
 import com.example.diaryapplication.viewmodel.AuthViewModel
 import java.time.LocalDate
 import java.time.LocalTime
@@ -112,6 +113,8 @@ fun MyPageScreen(
                                 showTimeDialog = true
                             } else {
                                 myPageViewModel.disableNotification()
+                                NotificationHelper.cancelAlarm(context)
+
                             }
                         }
                     )
@@ -197,6 +200,18 @@ fun MyPageScreen(
                 showTimeDialog = false // 창 닫기
             } // 새로운 시간 설정
         )
+    }
+
+    LaunchedEffect(notificationEnabled, notifyTime) {
+        if (notificationEnabled) {
+            NotificationHelper.scheduleDailyAlarm(
+                context = context,
+                hour = notifyTime.hour,
+                minute = notifyTime.minute
+            )
+        } else {
+            NotificationHelper.cancelAlarm(context)
+        }
     }
 
     // PIN 설정 다이얼로그

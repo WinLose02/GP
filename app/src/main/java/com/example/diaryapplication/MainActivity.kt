@@ -17,15 +17,41 @@ import com.example.diaryapplication.ui.theme.DiaryApplicationTheme
 import com.example.diaryapplication.ui.screens.auth.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.example.diaryapplication.notification.DiaryAlarmReceiver
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_DiaryApplication)
         super.onCreate(savedInstanceState)
+
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if(ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    1001
+                )
+            }
+        }
+
+
         setContent {
             DiaryApplicationTheme {
                 RootNav(intent?.data?.toString())
             }
         }
+
+
     }
 }
 

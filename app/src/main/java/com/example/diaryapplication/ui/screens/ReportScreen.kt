@@ -39,6 +39,11 @@ fun ReportScreen(
     var tab by remember { mutableStateOf(0) } // 0: 주간, 1: 월간
     val isWeekly = tab == 0 // 현재 주간 탭이면 True
 
+    LaunchedEffect(Unit){
+        reportViewModel.loadWeeklyData()
+        reportViewModel.loadMonthlyData()
+    }
+
     // 히스토그램 X축 라벨
     // 주간 -> 요일, 월간 -> 주차
     val weeklyLabels = listOf("일", "월", "화", "수", "목", "금", "토")
@@ -69,16 +74,16 @@ fun ReportScreen(
     val monthlyEmotions by reportViewModel.monthlyEmotions.collectAsState()
     val emotions = if (isWeekly) weeklyEmotions else monthlyEmotions
 
-    // TODO: AI 일기 요약 파트 (추후에 연동 작업)
-    val weeklyAiSummary by reportViewModel.weeklyAiSummary.collectAsState()
-    val monthlyAiSummary by reportViewModel.weeklyAiSummary.collectAsState()
+    // 일기 요약
+    val weeklySummaries by reportViewModel.weeklySummaries.collectAsState()
+    val monthlySummaries by reportViewModel.monthlySummaries.collectAsState()
 
     // 선택된 탭에 따라 주간 또는 월간 데이터 중 하나를 선택
     val diaryCount = if (isWeekly) weeklyDiaryCount else monthlyDiaryCount
     val avgExerciseMin = if (isWeekly) weeklyAvgExercise else monthlyAvgExercise
     val totalExerciseMin = if (isWeekly) weeklyTotalExcercise else monthlyTotalExercise
     val totalStudyMin = if (isWeekly) weeklyTotalStudy else monthlyTotalStudy
-    val aiSummaryText = if (isWeekly) weeklyAiSummary else monthlyAiSummary
+    val summaries = if (isWeekly) weeklySummaries else monthlySummaries
 
     // 월간을 주차 단위로 묶기
     // remember -> 데이터가 변경될 때만 재계산을 위함
@@ -194,7 +199,7 @@ fun ReportScreen(
             item {
                 DiaryOrSummaryCard(
                     title = if (isWeekly) "이번 주 일기" else "이번 달 일기",
-                    summary = aiSummaryText
+                    summaries = summaries
                 )
             }
             item { Spacer(Modifier.height(24.dp)) }
@@ -716,7 +721,7 @@ private fun TooltipCard(
 @Composable
 private fun DiaryOrSummaryCard(
     title: String,
-    summary: String?
+    summaries: List<Pair<String, String>>
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
@@ -726,14 +731,42 @@ private fun DiaryOrSummaryCard(
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            val text = summary?.takeIf { it.isNotBlank() } ?: "아직 작성된 일기가 없습니다"
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 110.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+
+            if(summaries.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min=110.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "아직 작성된 일기가 없습니다.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            else {
+                summaries.forEach { (date, summary) ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        // 날짜 표시
+                        Text(
+                            text = date,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        // 요약 내용 표시
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+                        )
+                    }
+                }
             }
         }
     }

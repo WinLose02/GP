@@ -32,9 +32,9 @@ class ReportViewModel : ViewModel() { // ViewModel을 상속받아 ReportViewMod
     val weeklyEmotions = MutableStateFlow<List<String>>(emptyList())
     val monthlyEmotions = MutableStateFlow<List<String>>(emptyList())
 
-    // AI 요약 (추후 OpenAI 연동)
-    val weeklyAiSummary = MutableStateFlow<String?>(null)
-    val monthlyAiSummary = MutableStateFlow<String?>(null)
+    // AI 요약
+    val weeklySummaries = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val monthlySummaries = MutableStateFlow<List<Pair<String, String>>>(emptyList())
 
     val isLoading = MutableStateFlow(false)
 
@@ -59,6 +59,7 @@ class ReportViewModel : ViewModel() { // ViewModel을 상속받아 ReportViewMod
                 weeklyTotalExercise.value = data.totalExercise
                 weeklyAvgExercise.value = if (data.count > 0) data.totalExercise / data.count else 0 // 일기가 없으면 0으로 나눌 수 없으므로 값은 0
                 weeklyEmotions.value = repository.getWeeklyEmotions(uid)
+                weeklySummaries.value = repository.getWeeklySummaries(uid)
 
             } catch (e: Exception) {
                         // 로드 실패 시 기본값 유지
@@ -85,6 +86,7 @@ class ReportViewModel : ViewModel() { // ViewModel을 상속받아 ReportViewMod
                 monthlyTotalExercise.value = data.totalExercise
                 monthlyAvgExercise.value = if (data.count > 0) data.totalExercise / data.count else 0
                 monthlyEmotions.value = repository.getMonthlyEmotions(uid)
+                monthlySummaries.value = repository.getMonthlySummaries(uid)
 
             } catch (e: Exception) {
                     // 로드 실패 시 기본값 유지
