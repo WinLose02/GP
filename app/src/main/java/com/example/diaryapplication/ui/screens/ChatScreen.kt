@@ -66,6 +66,8 @@ fun ChatScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
+            .consumeWindowInsets(padding)
+            .imePadding()
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp , vertical = 12.dp)
     ) {

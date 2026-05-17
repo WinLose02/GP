@@ -49,7 +49,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import kotlinx.coroutines.launch
+import android.view.ContextThemeWrapper
 
 // 날씨 타입
 private enum class WeatherType(val label: String, val icon: @Composable () -> Unit) {
@@ -89,6 +89,23 @@ fun DiaryScreen(
         return
     }
 
+    // 카메라 권한 허용 여부
+    // 기본적으론 False이지만, 권한이 허용이 된 이후에는 True로 설정하여 카메라를 실행시킴
+    var hasCameraPermission by remember { mutableStateOf(false) }
+
+    // 카메라 권한 요청 런처
+    // 사용자가 허용 및 거부를 하면 결과를 granted로 들어옴 -> true or false
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasCameraPermission = granted
+    }
+
+    // DiaryScreen이 처음 실행될때에만 권한 런처를 실행 -> 한 번만 권한을 요청
+    LaunchedEffect(Unit){
+        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    }
+
     // 입력 상태
     var diaryText by remember { mutableStateOf("") } // 일기 내용
     var routineText by remember { mutableStateOf("") } // 하루 일과
@@ -104,10 +121,6 @@ fun DiaryScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // 카메라 권한 허용 여부
-    // 기본적으론 False이지만, 권한이 허용이 된 이후에는 True로 설정하여 카메라를 실행시킴
-    var hasCameraPermission by remember { mutableStateOf(false) }
-
     // 얼굴 표정 분석 결과를 누적해서 저장하는 리스트
     // 일기를 저장 시에 이 리스트를 활용해서 최종 감정을 결정
     // AI 서버에게서 받은 결과를 여기에 저장
@@ -116,18 +129,7 @@ fun DiaryScreen(
 
     var latestVideoFile by remember { mutableStateOf<File?>(null) }
 
-    // 카메라 권한 요청 런처
-    // 사용자가 허용 및 거부를 하면 결과를 granted로 들어옴 -> true or false
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasCameraPermission = granted
-    }
 
-    // DiaryScreen이 처음 실행될때에만 권한 런처를 실행 -> 한 번만 권한을 요청
-     LaunchedEffect(Unit){
-         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-     }
 
     // 현재 녹화 객체를 저장 (저장 버튼 클릭 시, 종료하기 위함)
     var activeRecording by remember { mutableStateOf<Recording?>(null) }
@@ -246,7 +248,7 @@ fun DiaryScreen(
         3. 그 외 탭이나 앱을 종료하면, 생명 주기 관리인 lifecycleOwner에 의해 자동으로 카메라 종료
      */
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.size(1.dp)) {
         if(hasCameraPermission) { // 카메라 권한이 허용된 경우에만 카메라를 실행
             AndroidView( // PreviewView가 Android View 형태이므로 AndroidView로 감싸야 함
                 factory = { ctx ->
@@ -301,7 +303,9 @@ fun DiaryScreen(
         Column(
             modifier = Modifier
                 .padding(padding)
+                .consumeWindowInsets(padding)
                 .fillMaxSize()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -469,12 +473,12 @@ fun DiaryScreen(
             PrimaryPillButton(
                 text = if (isLoading) "저장 중 . . . " else "일기 저장하기",
                 onClick = {
-                    if(activeRecording!= null) {
-
-                    saveRequested = true
-                    activeRecording?.stop()
-                    activeRecording = null
-                    } else {
+                    if(activeRecording!= null) { // 카메라 권한이 있을 경우
+                        saveRequested = true
+                        activeRecording?.stop()
+                        activeRecording = null
+                    }
+                    else { // 카메라 권한이 없으면 그냥 바로 일기를 저장
                         diaryViewModel.saveDiary(
                             date = selectedDate,
                             content = diaryText,
@@ -772,6 +776,8 @@ private fun HourMinutePickerSheet(
 
     // 현재 선택된 시간(분)의 인덱스 ({} 안에 있는 부분이 계산한 분 단위 값의 인덱스를 반환)
     var minuteIndex by remember { mutableIntStateOf(minuteValues.indexOf(initMin).coerceAtLeast(0)) }
+
+
     ModalBottomSheet(
         onDismissRequest = onDismiss, // 바깥 터치 시, onDismiss 호출
         sheetState = sheetState
@@ -801,13 +807,15 @@ private fun HourMinutePickerSheet(
                             .height(160.dp)
                             .width(120.dp),
                         factory = { ctx ->
-                            NumberPicker(ctx).apply {
+                            val themedCtx = ContextThemeWrapper(ctx, android.R.style.Theme_DeviceDefault_Light)
+                            NumberPicker(themedCtx).apply {
                                 minValue = 0
                                 maxValue = hourValues.lastIndex // 선택 가능한 인덱스 범위를 설정
                                 displayedValues = hourValues.map { it.toString() }.toTypedArray() // 화면에 보여줄 텍스트
                                 value = hourIndex // 초기 선택값 설정
                                 wrapSelectorWheel = false // 끝에서 처음으로 돌아가지 않도록 방지 (24->0으로 가지 않게)
                                 setOnValueChangedListener { _, _, v -> hourIndex = v } // 휠(다이얼)을 스크롤 시에 값을 업데이트
+
                             } },
                         update = { p -> // 상태가 바뀔 때 마다 실행
                             p.minValue = 0; p.maxValue = hourValues.lastIndex
@@ -825,7 +833,8 @@ private fun HourMinutePickerSheet(
                             .height(160.dp)
                             .width(120.dp),
                         factory = { ctx ->
-                            NumberPicker(ctx).apply {
+                            val themedCtx = ContextThemeWrapper(ctx, android.R.style.Theme_DeviceDefault_Light)
+                            NumberPicker(themedCtx).apply {
                                 minValue = 0
                                 maxValue = minuteValues.lastIndex
 
@@ -835,6 +844,7 @@ private fun HourMinutePickerSheet(
                                 value = minuteIndex
                                 wrapSelectorWheel = false
                                 setOnValueChangedListener { _, _, v -> minuteIndex = v }
+
                             }},
                         update = { p ->
                             p.minValue = 0

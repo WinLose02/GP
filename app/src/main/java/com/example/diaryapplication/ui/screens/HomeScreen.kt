@@ -38,6 +38,8 @@ fun HomeScreen(
     val nickname by authViewModel.currentNickname.collectAsState()
     val userName = nickname ?: "사용자" // 닉네임이 null이면 "사용자"로 표시
 
+    val emotionEmojiMap by diaryViewModel.emotionEmojiMap.collectAsState()
+
     val today = remember { LocalDate.now() } // 오늘 날짜 가져오기 (재계산 방지를 위해 remember)
     val greeting = when (today.hour) { // 현재 시간의 시간(Hour)를 가져와서
 
@@ -50,7 +52,10 @@ fun HomeScreen(
     }
 
     // 화면이 처음 표시될 때, 이번 달 스트릿 데이터를 불러옴
-    LaunchedEffect(Unit) { diaryViewModel.loadMonthStreak() }
+    LaunchedEffect(Unit) {
+        diaryViewModel.loadMonthStreak()
+        diaryViewModel.loadMonthEmojis(today.year, today.monthValue)
+    }
 
     // DiaryViewModel에서 실시간으로 정보들을 받아옴
     val writtenDates by diaryViewModel.writtenDates.collectAsState() // 일기를 작성한 날짜 목록
@@ -101,8 +106,12 @@ fun HomeScreen(
     // plusDays -> 일요일에서 i일을 더한 날짜
     // takeIf -> 오늘 이후의 날짜는 제외
     // .let{} -> 해당 날짜가 있으면 이모지를 추가하되, 현재는 하드 코딩으로 임시로 대체한 상태
-    val weekWeatherEmojis = remember(today) {
-        (0..6).mapNotNull { i -> weekStart.plusDays(i.toLong()).takeIf { !it.isAfter(today) }?.let { "⛅" } }
+    val weekWeatherEmojis = remember(today, emotionEmojiMap) {
+        (0..6).mapNotNull { i ->
+            val date = weekStart.plusDays(i.toLong())
+            if (date.isAfter(today)) null
+            else emotionToWeatherEmoji(emotionEmojiMap[date])
+        }
     }
 
     // 이번주 일요일~오늘까지의 요일 라벨 목록을 생성
@@ -391,3 +400,15 @@ private fun MonthlyRecordCard(
 // LocalDate에서 hour를 가져오는 확장
 // java.time.LocalTime 활용
 private val LocalDate.hour: Int get() = java.time.LocalTime.now().hour
+
+private fun emotionToWeatherEmoji(emotionEmoji:String?) : String {
+    return when(emotionEmoji) {
+        "😊" -> "☀️"   // 기쁨  → 맑음
+        "😢" -> "🌧️"  // 슬픔  → 비
+        "😠" -> "⛈️"  // 분노  → 폭풍
+        "😰" -> "🌬️"  // 불안  → 바람
+        "😳" -> "🌦️"  // 당황  → 소나기
+        "❎" -> "❎"   // 분석 실패 → 구름 조금
+        else -> "🌫️"  // 기록 없음 → 안개 (회색)
+    }
+}
