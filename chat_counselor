@@ -54,6 +54,33 @@ QUESTION_TAG_PATTERNS = {
         "그런기분이야",
         "그렇게느껴져",
     ),
+    # 반복 질문 개선: 이미 감정을 말한 뒤 다시 현재 기분만 되묻는 질문을 구분
+    "current_feeling_repeat": (
+        "지금기분이어때",
+        "지금기분이어떤",
+        "지금어떤기분",
+        "어떤기분인지",
+        "어떤기분이드는지",
+        "기분이드는지",
+    ),
+    # 반복 질문 개선: 구체 방향 없이 더 말해달라는 막연한 질문을 구분
+    "tell_more_generic": (
+        "좀더이야기해줄수있어",
+        "조금더이야기해줄수있어",
+        "더이야기해줄수있어",
+        "더말해줄래",
+        "더말해줘",
+        "이야기해줄수있어",
+    ),
+    # 반복 질문 개선: 사용자가 이미 이유를 말했는데 원인을 다시 묻는 질문을 구분
+    "reason_repeat": (
+        "이유가뭘까",
+        "이유가뭐야",
+        "왜그런기분",
+        "무엇때문에그런",
+        "그런기분이드는이유",
+        "왜그렇게느껴",
+    ),
 }
 
 REPLY_SIMILARITY_SIGNALS = (
@@ -73,20 +100,25 @@ EMPATHY_SIGNALS = (
 )
 
 EMOTION_PATTERNS = {
-    "anger": ("화나", "화가나", "짜증", "억울", "답답", "열받", "분해"),
-    "sadness": ("슬퍼", "우울", "속상", "눈물", "허무", "마음이아파"),
-    "anxiety": ("불안", "걱정", "초조", "긴장", "무서", "떨려"),
-    "joy": ("기뻐", "좋아", "행복", "신나", "웃음", "뿌듯"),
-    "surprise": ("놀랐", "당황", "깜짝", "얼떨떨", "벙쪘"),
+    # 감정 단서 보완: 일상적인 표현도 감정으로 잡아 불필요한 확인 질문을 줄임
+    "anger": ("화나", "화가나", "짜증", "억울", "답답", "열받", "분해", "빡쳐", "싫증", "성질"),
+    "sadness": ("슬퍼", "우울", "속상", "눈물", "허무", "마음이아파", "서운", "외로", "공허", "침울"),
+    "anxiety": ("불안", "걱정", "초조", "긴장", "무서", "떨려", "두려", "막막", "혼란", "부담"),
+    # 반복 질문 개선: 피곤/무기력 표현을 감정 단서로 잡아 불필요한 감정 확인 질문을 줄임
+    "fatigue": ("피곤", "지쳐", "지침", "귀찮", "무기력", "방전", "기운없", "잠을못", "못자"),
+    "joy": ("기뻐", "좋아", "행복", "신나", "웃음", "뿌듯", "설레", "기대", "만족", "후련"),
+    "surprise": ("놀랐", "당황", "깜짝", "얼떨떨", "벙쪘", "황당", "멘붕", "어이없"),
 }
 
 EMOTION_REASON_TAG = {
     "anger": "anger_reason",
     "sadness": "sadness_reason",
     "anxiety": "anxiety_reason",
+    "fatigue": "reason_repeat",
 }
 
 QUESTION_STRATEGIES = {"emotion_check", "clarify", "expand"}
+REPEAT_QUESTION_TAGS = {"current_feeling_repeat", "tell_more_generic", "reason_repeat"}
 STRATEGY_SEQUENCE = ("empathy", "emotion_check", "clarify", "organize", "past_connection", "expand")
 GENERIC_REPEAT_PATTERNS = ("무슨일이있었", "이야기해줄래", "어떻게된거야")
 FALLBACK_REPLY = "오늘 하루도 정말 애썼어. 지금 느끼는 마음을 너무 몰아붙이지 않았으면 좋겠어."
@@ -154,6 +186,11 @@ class ChatState:
         # 새 상담 세션에서 사용할 기본 상태값을 초기화
         self.prev_reply = None
         self.asked_question_tags = []
+        # 반복 질문 개선: 사용자가 이미 말한 감정/원인 단서를 저장해 같은 맥락 재질문을 막음
+        self.known_facts = {
+            "feelings": [],
+            "reasons": [],
+        }
         self.current_emotion = "unknown"
         self.emotion_confidence = 0.0
         self.conversation_stage = "rapport"
@@ -165,6 +202,11 @@ class ChatState:
         # 상담 종료나 새 시작 시 세션 상태를 처음 값으로 되돌림
         self.prev_reply = None
         self.asked_question_tags = []
+        # 반복 질문 개선: 새 상담에서는 누적된 감정/원인 단서도 초기화
+        self.known_facts = {
+            "feelings": [],
+            "reasons": [],
+        }
         self.current_emotion = "unknown"
         self.emotion_confidence = 0.0
         self.conversation_stage = "rapport"
@@ -248,6 +290,56 @@ def _extract_topics(text: str, limit: int = 3) -> list[str]:
         if len(topics) >= limit:
             break
     return topics
+
+
+def _extract_known_facts(text: str) -> dict[str, list[str]]:
+    # 반복 질문 개선: 사용자가 이미 밝힌 감정과 원인 단서를 간단한 규칙으로 수집
+    normalized = _normalize_korean_text(text)
+    facts = {
+        "feelings": [],
+        "reasons": [],
+    }
+
+    # 감정 단서 보완: 이미 말한 감정을 더 넓게 저장해 같은 감정 확인 질문 반복을 줄임
+    feeling_patterns = {
+        "피곤": ("피곤", "지쳐", "지침", "방전", "기운없", "잠을못", "못자"),
+        "무기력": ("귀찮", "무기력", "아무것도하기싫", "하기싫", "의욕없", "멍해"),
+        "불안": ("불안", "걱정", "초조", "긴장", "두려", "무서", "막막", "부담"),
+        "분노": ("화나", "화가나", "짜증", "억울", "답답", "열받", "분해", "빡쳐"),
+        "슬픔": ("슬퍼", "우울", "속상", "허무", "서운", "외로", "공허", "침울"),
+        "기쁨": ("기뻐", "좋아", "행복", "신나", "뿌듯", "설레", "만족", "후련"),
+        "놀람": ("놀랐", "당황", "깜짝", "얼떨떨", "황당", "멘붕", "어이없"),
+    }
+    reason_patterns = {
+        "수면 부족": ("잠을못", "못자", "잠을제대로못", "잠이부족", "수면부족"),
+        "일정 과다": ("일정", "바쁘", "빡빡", "할일", "많아서", "쌓"),
+        "학업/업무 부담": ("과제", "시험", "수업", "일이많", "해야할일"),
+        "대인관계": ("친구", "가족", "사람", "관계", "말다툼"),
+        # 감정 단서 보완: 자주 나오는 원인도 저장해 같은 원인 질문을 줄임
+        "건강/컨디션": ("아파", "몸살", "두통", "컨디션", "병원", "몸이안좋"),
+        "돈/생활 부담": ("돈", "비용", "알바", "생활비", "월세", "부담"),
+        "진로/미래 고민": ("진로", "취업", "미래", "졸업", "면접", "포트폴리오"),
+    }
+
+    for label, patterns in feeling_patterns.items():
+        if any(pattern in normalized for pattern in patterns):
+            facts["feelings"].append(label)
+
+    for label, patterns in reason_patterns.items():
+        if any(pattern in normalized for pattern in patterns):
+            facts["reasons"].append(label)
+
+    return facts
+
+
+def _merge_known_facts(state: ChatState, facts: dict[str, list[str]]) -> None:
+    # 반복 질문 개선: 같은 단서를 중복 저장하지 않고 최근 단서만 유지
+    for key in ("feelings", "reasons"):
+        current = state.known_facts.setdefault(key, [])
+        for item in facts.get(key, []):
+            if item not in current:
+                current.append(item)
+        state.known_facts[key] = current[-6:]
 
 
 def _detect_emotion(text: str) -> tuple[str, float]:
@@ -381,7 +473,15 @@ def _choose_refine_strategy(strategy: str, diagnostics: dict, state: ChatState, 
     issues_text = " ".join(diagnostics.get("issues", []))
     flags = set(diagnostics.get("repeat_flags", [])) | set(diagnostics.get("rule_flags", []))
 
-    if "semantic_question_repeat" in flags or "same_question_tag" in flags or "generic_question_repeat" in flags:
+    if (
+        "similar_reply" in flags
+        or "semantic_question_repeat" in flags
+        or "same_question_tag" in flags
+        or "generic_question_repeat" in flags
+        or "known_feeling_repeat" in flags
+        or "known_reason_repeat" in flags
+        or "generic_followup_repeat" in flags
+    ):
         return _next_strategy_candidates(strategy, state, related_memories)[0]
     if "question_heavy" in flags:
         return "organize"
@@ -401,6 +501,9 @@ def _build_system_prompt_for_strategy(strategy: str, state: ChatState, diagnosti
         f"[대화 단계] {state.conversation_stage}",
         f"[남은 질문 예산] {state.question_budget}",
         f"[이미 사용한 질문 태그] {', '.join(state.asked_question_tags) if state.asked_question_tags else '없음'}",
+        # 반복 질문 개선: 모델이 이미 확인된 맥락을 다시 캐묻지 않도록 명시
+        f"[이미 확인된 감정] {', '.join(state.known_facts.get('feelings', [])) if state.known_facts.get('feelings') else '없음'}",
+        f"[이미 확인된 원인] {', '.join(state.known_facts.get('reasons', [])) if state.known_facts.get('reasons') else '없음'}",
     ]
 
     if diagnostics:
@@ -430,6 +533,9 @@ def _build_user_prompt(
     parts.append(f"[추정 감정]\n{state.current_emotion} ({state.emotion_confidence:.2f})")
     parts.append(f"[최근 전략]\n{', '.join(state.recent_strategies[-3:]) if state.recent_strategies else '없음'}")
     parts.append(f"[최근 핵심 주제]\n{', '.join(state.recent_topics[-5:]) if state.recent_topics else '없음'}")
+    # 반복 질문 개선: 답변 생성 시 이미 답한 감정/원인을 컨텍스트로 제공
+    parts.append(f"[이미 확인된 감정]\n{', '.join(state.known_facts.get('feelings', [])) if state.known_facts.get('feelings') else '없음'}")
+    parts.append(f"[이미 확인된 원인]\n{', '.join(state.known_facts.get('reasons', [])) if state.known_facts.get('reasons') else '없음'}")
 
     if state.prev_reply:
         parts.append(f"[직전 답변]\n{state.prev_reply}")
@@ -500,6 +606,8 @@ def detect_repeat_risk(reply: str, state: ChatState, strategy: str) -> dict:
     flags = []
     current_tag = _extract_question_tag(reply)
     previous_strategy = state.recent_strategies[-1] if state.recent_strategies else None
+    has_known_feeling = bool(state.known_facts.get("feelings"))
+    has_known_reason = bool(state.known_facts.get("reasons"))
 
     if _is_similar_reply(reply, state.prev_reply, strategy, previous_strategy):
         issues.append("직전 답변과 표현이 지나치게 비슷함")
@@ -508,6 +616,19 @@ def detect_repeat_risk(reply: str, state: ChatState, strategy: str) -> dict:
     if current_tag and current_tag in state.asked_question_tags:
         issues.append("이미 했던 핵심 질문을 반복하고 있음")
         flags.append("same_question_tag")
+
+    # 반복 질문 개선: 질문 자체가 아니라 이미 답한 감정/원인을 되묻는 질문만 문제로 표시
+    if current_tag == "current_feeling_repeat" and has_known_feeling:
+        issues.append("이미 말한 감정을 다시 묻고 있음")
+        flags.append("known_feeling_repeat")
+
+    if current_tag == "reason_repeat" and has_known_reason:
+        issues.append("이미 말한 원인을 다시 묻고 있음")
+        flags.append("known_reason_repeat")
+
+    if current_tag == "tell_more_generic" and (has_known_feeling or has_known_reason):
+        issues.append("이미 나온 맥락에서 막연하게 추가 설명만 요구하고 있음")
+        flags.append("generic_followup_repeat")
 
     normalized = _normalize_korean_text(reply)
     if any(pattern in normalized for pattern in GENERIC_REPEAT_PATTERNS):
@@ -633,11 +754,19 @@ def _evaluate_reply(
         if "반말이 아님" not in issues:
             issues.append("반말이 아님")
 
-    if _contains_question(reply) and "공감" not in "".join(issues) and strategy in QUESTION_STRATEGIES:
-        if _sentence_count(reply) <= 2:
-            rule_flags.append("question_heavy")
-            if "질문 위주 답변" not in issues:
-                issues.append("질문 위주 답변")
+    # 반복 질문 개선: 모든 질문을 나쁘게 보지 않고, 새 정보 없이 질문만 던질 때만 감점
+    is_repeat_question = bool(set(repeat_info["repeat_flags"]) & {
+        "same_question_tag",
+        "semantic_question_repeat",
+        "generic_question_repeat",
+        "known_feeling_repeat",
+        "known_reason_repeat",
+        "generic_followup_repeat",
+    })
+    if _contains_question(reply) and strategy in QUESTION_STRATEGIES and is_repeat_question:
+        rule_flags.append("question_repeat")
+        if "반복 질문 위주 답변" not in issues:
+            issues.append("반복 질문 위주 답변")
 
     score = llm_score
     score -= 0.5 * len(set(issues))
@@ -690,6 +819,8 @@ def update_state_from_turn(
     emotion, confidence = _detect_emotion(user_input)
     state.current_emotion = emotion
     state.emotion_confidence = confidence
+    # 반복 질문 개선: 다음 턴에서 같은 감정/원인을 되묻지 않도록 사용자 발화 단서를 누적
+    _merge_known_facts(state, _extract_known_facts(user_input))
 
     for topic in _extract_topics(user_input):
         if topic not in state.recent_topics:
@@ -704,10 +835,23 @@ def update_state_from_turn(
         state.asked_question_tags.append(question_tag)
     state.asked_question_tags = state.asked_question_tags[-8:]
 
-    if strategy in QUESTION_STRATEGIES:
+    repeated_question_flags = {
+        "same_question_tag",
+        "semantic_question_repeat",
+        "generic_question_repeat",
+        "known_feeling_repeat",
+        "known_reason_repeat",
+        "generic_followup_repeat",
+    }
+    has_repeated_question = bool(set(diagnostics.get("repeat_flags", [])) & repeated_question_flags)
+
+    # 반복 질문 개선: 좋은 질문은 허용하고, 반복/막연한 질문일 때만 질문 예산을 줄임
+    if has_repeated_question:
         state.question_budget = max(0, state.question_budget - 1)
+    elif strategy in QUESTION_STRATEGIES:
+        state.question_budget = max(1, state.question_budget - 1)
     else:
-        state.question_budget = 2
+        state.question_budget = min(2, state.question_budget + 1)
 
     if strategy in {"emotion_check", "clarify"}:
         state.conversation_stage = "clarify"
@@ -727,6 +871,8 @@ def chat_with_counselor(
     # 전체 실행 흐름
     user_input = _safe_text(user_input)
     state = state or ChatState()
+    # 반복 질문 개선: 이번 사용자 입력의 감정/원인도 답변 생성 전에 반영
+    _merge_known_facts(state, _extract_known_facts(user_input))
 
     emotion, confidence = _detect_emotion(user_input)
     state.current_emotion = emotion
