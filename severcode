@@ -1,0 +1,84 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from core.summary import (
+    refine_diary,
+    brief_summary,
+    detect_emotion,
+    extract_keywords,
+)
+from core.chat_with_counselor import ChatState, chat_with_counselor
+
+app = FastAPI()
+
+# 사용자별 상담 상태를 서버 메모리에 보관해 같은 질문과 답변이 반복 방지
+chat_states: dict[str, ChatState] = {}
+
+
+class DiaryRequest(BaseModel):
+    user_id: str
+    content: str
+    date: str
+
+
+@app.get("/")
+def root():
+    return {"message": "Mood Diary API is running"}
+
+
+@app.post("/diary/analyze")
+def analyze_diary(req: DiaryRequest):
+    content = (req.content or "").strip()
+
+    if not content:
+        return {
+            "user_id": req.user_id,
+            "date": req.date,
+            "error": "일기 내용이 비어 있습니다."
+        }
+
+    try:
+        refined_diary = refine_diary(content)
+    except Exception as e:
+        print("refine_diary error:", e)
+        refined_diary = content
+
+    try:
+        summary = brief_summary(refined_diary)
+    except Exception as e:
+        print("brief_summary error:", e)
+        summary = "요약 생성 실패"
+
+    try:
+        emotion = detect_emotion(refined_diary)
+    except Exception as e:
+        print("detect_emotion error:", e)
+        emotion = {
+            "label": "중립",
+            "reason": "",
+            "fortune": ""
+        }
+
+    try:
+        keywords = extract_keywords(summary)
+    except Exception as e:
+        print("extract_keywords error:", e)
+        keywords = []
+
+    try:
+        # 같은 user_id의 이전 상담 흐름을 재사용해 반복 방지 정보가 유지
+        state = chat_states.setdefault(req.user_id, ChatState())
+        counsel = chat_with_counselor(refined_diary, state=state)
+    except Exception as e:
+        print("chat_with_counselor error:", e)
+        counsel = "오늘도 정말 애썼어. 네 마음이 조금은 가벼워졌으면 좋겠어."
+
+    return {
+        "user_id": req.user_id,
+        "date": req.date,
+        "refined_diary": refined_diary,
+        "summary": summary,
+        "emotion": emotion,
+        "keywords": keywords,
+        "counsel": counsel
+    }

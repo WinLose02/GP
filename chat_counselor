@@ -1,0 +1,998 @@
+import json
+import re
+
+try:
+    from openai import OpenAI
+except ModuleNotFoundError:
+    OpenAI = None
+
+client = OpenAI() if OpenAI is not None else None
+
+
+def _normalize_korean_text(text: str) -> str:
+    # 공백과 특수문자를 제거
+    return re.sub(r"[^0-9A-Za-z가-힣]+", "", text or "")
+
+
+QUESTION_TAG_PATTERNS = {
+    "hardest_part": (
+        "어떤게제일힘들어",
+        "무엇이가장힘들어",
+        "뭐가제일힘들어",
+        "제일버거운게뭐야",
+    ),
+    "anxiety_reason": (
+        "왜불안",
+        "무엇때문에불안",
+        "어떤게불안",
+        "뭐가제일걱정",
+        "가장신경쓰이는게뭐야",
+    ),
+    "anger_reason": (
+        "왜화가났",
+        "무엇때문에화가났",
+        "억울",
+        "답답했던게있",
+        "뭐가제일화나",
+    ),
+    "sadness_reason": (
+        "왜슬픈",
+        "무슨일이있었",
+        "어떤일이제일마음에남",
+        "어떤부분이가장속상",
+    ),
+    "discomfort_reason": (
+        "무엇이가장불편",
+        "뭐가제일불편",
+        "어떤점이가장거슬",
+        "어디가제일불편",
+    ),
+    "emotion_check": (
+        "화가나있는거같아",
+        "당황한거같아",
+        "맞을까",
+        "그런기분이야",
+        "그렇게느껴져",
+    ),
+    # 반복 질문 개선: 이미 감정을 말한 뒤 다시 현재 기분만 되묻는 질문을 구분
+    "current_feeling_repeat": (
+        "지금기분이어때",
+        "지금기분이어떤",
+        "지금어떤기분",
+        "어떤기분인지",
+        "어떤기분이드는지",
+        "기분이드는지",
+    ),
+    # 반복 질문 개선: 구체 방향 없이 더 말해달라는 막연한 질문을 구분
+    "tell_more_generic": (
+        "좀더이야기해줄수있어",
+        "조금더이야기해줄수있어",
+        "더이야기해줄수있어",
+        "더말해줄래",
+        "더말해줘",
+        "이야기해줄수있어",
+    ),
+    # 반복 질문 개선: 사용자가 이미 이유를 말했는데 원인을 다시 묻는 질문을 구분
+    "reason_repeat": (
+        "이유가뭘까",
+        "이유가뭐야",
+        "왜그런기분",
+        "무엇때문에그런",
+        "그런기분이드는이유",
+        "왜그렇게느껴",
+    ),
+}
+
+REPLY_SIMILARITY_SIGNALS = (
+    ("많이힘들었겠네", "정말힘들었겠네", "오늘많이힘들었겠네", "많이힘들었겠다"),
+    ("많이지쳤겠네", "많이버거웠겠네"),
+    ("어떤게제일힘들어", "무엇이가장힘들어", "뭐가제일힘들어", "제일버거운게뭐야"),
+    ("왜불안해", "무엇때문에불안해", "어떤게불안해", "뭐가제일걱정돼"),
+    ("천천히말해줘", "하나씩말해줘"),
+    ("많이속상했겠다", "마음이많이무거웠겠다"),
+)
+
+EMPATHY_SIGNALS = (
+    ("많이힘들었겠네", "정말힘들었겠네", "많이힘들었겠다"),
+    ("많이지쳤겠네", "버거웠겠네"),
+    ("속상했겠다", "마음이무거웠겠다"),
+    ("불안했겠다", "걱정이컸겠다"),
+)
+
+EMOTION_PATTERNS = {
+    # 감정 단서 보완: 일상적인 표현도 감정으로 잡아 불필요한 확인 질문을 줄임
+    "anger": ("화나", "화가나", "짜증", "억울", "답답", "열받", "분해", "빡쳐", "싫증", "성질"),
+    "sadness": ("슬퍼", "우울", "속상", "눈물", "허무", "마음이아파", "서운", "외로", "공허", "침울"),
+    "anxiety": ("불안", "걱정", "초조", "긴장", "무서", "떨려", "두려", "막막", "혼란", "부담"),
+    # 반복 질문 개선: 피곤/무기력 표현을 감정 단서로 잡아 불필요한 감정 확인 질문을 줄임
+    "fatigue": ("피곤", "지쳐", "지침", "귀찮", "무기력", "방전", "기운없", "잠을못", "못자"),
+    "joy": ("기뻐", "좋아", "행복", "신나", "웃음", "뿌듯", "설레", "기대", "만족", "후련"),
+    "surprise": ("놀랐", "당황", "깜짝", "얼떨떨", "벙쪘", "황당", "멘붕", "어이없"),
+}
+
+EMOTION_REASON_TAG = {
+    "anger": "anger_reason",
+    "sadness": "sadness_reason",
+    "anxiety": "anxiety_reason",
+    "fatigue": "reason_repeat",
+}
+
+QUESTION_STRATEGIES = {"emotion_check", "clarify", "expand"}
+REPEAT_QUESTION_TAGS = {"current_feeling_repeat", "tell_more_generic", "reason_repeat"}
+STRATEGY_SEQUENCE = ("empathy", "emotion_check", "clarify", "organize", "past_connection", "expand")
+GENERIC_REPEAT_PATTERNS = ("무슨일이있었", "이야기해줄래", "어떻게된거야")
+FALLBACK_REPLY = "오늘 하루도 정말 애썼어. 지금 느끼는 마음을 너무 몰아붙이지 않았으면 좋겠어."
+
+STRATEGY_GUIDELINES = {
+    "empathy": "이번 턴의 목적은 감정을 먼저 받아주고 안정감을 주는 것이다. 질문 없이 1~2문장으로 정리형 공감을 우선하라.",
+    "emotion_check": "이번 턴의 목적은 감정을 단정하지 않고 짧은 확인 질문 1개로 감정 방향을 확인하는 것이다. 질문 전에 공감을 먼저 넣어라.",
+    "clarify": "이번 턴의 목적은 이미 드러난 감정의 이유를 한 단계만 더 구체화하는 것이다. 같은 의미 질문 반복 없이 질문은 1개만 써라.",
+    "organize": "이번 턴의 목적은 이미 나온 내용을 정리하고 사용자가 스스로 마음을 붙잡을 수 있게 돕는 것이다. 질문 없이 정리형 응답을 우선하라.",
+    "past_connection": "이번 턴의 목적은 현재 대화와 관련성이 높은 과거 기록 1개만 자연스럽게 연결해 패턴을 짚는 것이다. 과거를 억지로 끌어오지 마라.",
+    "expand": "이번 턴의 목적은 아직 다루지 않은 현재 주제의 한 부분만 가볍게 확장하는 것이다. 일반적인 질문은 피하고 구체적인 질문 1개만 써라.",
+}
+
+SYSTEM_PROMPT = """
+너는 사용자의 감정을 공감하고 마음을 정리하도록 돕는 대화 파트너다.
+    친한 친구처럼 편안한 반말로 대화하되 가볍지 않게 말한다.
+
+대화 규칙:
+- 사용자가 그날 작성한 일기를 읽고 내용을 정확히 파악한다.
+- 감정을 먼저 공감하고 판단하지 않는다.
+- 해결책은 사용자가 원할 때만 제시한다.
+- 사용자가 궁금한 것을 물으면 관련 내용을 간략히 설명한다.
+- 사용자가 지식적인 부분에 대한 질문을 하면 사실에 기반해 전문적으로 답한다.
+- 사용자가 답안에 대해 고민하면, 선택지 중 하나를 추천하고 그 이유도 함께 설명한다.
+- 질문은 꼭 필요할 때만 한다.
+- 사용자의 감정 상태가 모호하게 느껴지면, 감정을 단정하지 말고 짧은 확인 질문을 한다.
+- 감정 확인 질문은 직설적으로 “지금 기분이 어때?”라고 묻기보다, 사용자에게 먼저 묻고 의사가 맞는지 자연스럽게 대화를 이어간다.(예: "지금 화가 나있는거 같아?","당황한거 같아 보이는데 맞을까?”)
+- 사용자의 감정상태가 무엇인지 확실하게 알았다면 감정별 응답 규칙을 의거하여 대화를 이어나간다.
+- 단, 중립이라 판단을 한다면 별 질문 없이 감정별 응답 규칙에 따라 평문을 이어나간다
+- 대화가 끊길 때만, 그리고 이미 다룬 내용이 아닐 때만 키워드 질문으로 확장한다.
+- 당일 일기에서 더 확장할 키워드가 없다면, 과거의 일기나 상담에서 현재와 연결될 수 있는 내용을 한 가지 꺼내 확인 질문 형태로 이어간다.
+- 현재 대화와 관련성이 높은 과거 요약이 제공되면, 그중 가장 관련 높은 1개만 자연스럽게 언급할 수 있다.
+- 대부분은 정리 중심으로 답한다.
+- 관련성이 낮거나 확실하지 않다면 과거를 억지로 언급하지 않는다.
+- 이미 답한 내용은 반복해서 묻지 않는다.
+- 사용자의 감정이 불확실하다면 질문해서 감정을 알아낸다
+
+감정별 응답 규칙:
+- 초기 응답은 일기를 통해 나온 감정 값을 가지고 판단한다.
+- 이후 대화를 통해 사용자의 감정이 달라졌다고 분명히 드러나면, 초기 감정에 고정되지 않고 현재 드러나는 감정을 기준으로 대화를 이어간다.
+- 사용자의 감정이 분노상태라면, 감정을 진정시키고 이유를 짚는다.
+- 사용자의 감정이 슬픔상태이라면, 해결책보다 먼저 감정을 충분히 공감하고, 무리하게 기운을 내라고 하지 않는다.
+- 사용자의 감정이 불안상태이라면, 질문보다 먼저 안정감을 주는 말과 안심의 표현을 우선하고, 한 번에 하나씩 정리할 수 있도록 돕는다.
+- 사용자의 감정이 기쁨상태이라면, 그 감정을 함께 긍정적으로 반응하고, 왜 좋게 느껴졌는지 자연스럽게 이어서 묻는다.
+- 사용자의 감정이 놀람상태이라면, 갑작스럽게 흔들린 마음을 먼저 진정시킬 수 있도록 반응하고, 상황을 차분히 정리하도록 돕는다.
+- 사용자의 감정이 중립상태이라면, 상황을 가볍게 정리하며 대화한다.
+
+말투 규칙:
+- 반말을 사용
+- 1~2문장 (질문 시 최대 3문장)
+- 너무 딱딱하거나 기계적인 표현은 피한다.
+- 친구처럼 편안하지만 가볍지 않게 말한다.
+- 감정 공감을 반드시 먼저 표현한다
+"""
+
+DEBUG_SELF_REFINE = True
+SHOW_INTERNAL_LOG = True
+REFINE_THRESHOLD = 8.0
+MAX_REFINE_ROUNDS = 2
+
+
+class ChatState:
+    #다음 턴 전략 선택의 기준으로 사용
+    def __init__(self):
+        # 새 상담 세션에서 사용할 기본 상태값을 초기화
+        self.prev_reply = None
+        self.asked_question_tags = []
+        # 반복 질문 개선: 사용자가 이미 말한 감정/원인 단서를 저장해 같은 맥락 재질문을 막음
+        self.known_facts = {
+            "feelings": [],
+            "reasons": [],
+        }
+        self.current_emotion = "unknown"
+        self.emotion_confidence = 0.0
+        self.conversation_stage = "rapport"
+        self.recent_topics = []
+        self.recent_strategies = []
+        self.question_budget = 2
+
+    def reset(self):
+        # 상담 종료나 새 시작 시 세션 상태를 처음 값으로 되돌림
+        self.prev_reply = None
+        self.asked_question_tags = []
+        # 반복 질문 개선: 새 상담에서는 누적된 감정/원인 단서도 초기화
+        self.known_facts = {
+            "feelings": [],
+            "reasons": [],
+        }
+        self.current_emotion = "unknown"
+        self.emotion_confidence = 0.0
+        self.conversation_stage = "rapport"
+        self.recent_topics = []
+        self.recent_strategies = []
+        self.question_budget = 2
+
+
+def _safe_text(text: str, limit: int = 1200) -> str:
+    return (text or "").strip()[:limit]
+
+
+def _format_related_memories(related_memories) -> str:
+    # 과거 기록을 프롬프트에 넣기 쉬운 텍스트 블록으로 바꿈
+    if not related_memories:
+        return ""
+
+    lines = []
+    for m in related_memories[:3]:
+        date = m.get("date", "")
+        summary = m.get("summary", "")
+        tags = ", ".join(m.get("tags", []))
+        lines.append(f"- {date} | 요약: {summary} | 키워드: {tags}")
+
+    return "과거 관련 기록:\n" + "\n".join(lines)
+
+
+def _call_chat(system_prompt: str, user_prompt: str, temperature: float = 0.3) -> str:
+    # OpenAI 호출
+    if client is None:
+        raise RuntimeError("openai package is not installed")
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=temperature
+    )
+    return (response.choices[0].message.content or "").strip()
+
+
+def _sentence_count(text: str) -> int:
+    # 답변이 1~3문장 규칙을 지키는지 확인
+    pieces = re.split(r"[.!?。\n]", text)
+    return len([piece for piece in pieces if piece.strip()])
+
+
+def _contains_question(text: str) -> bool:
+    # 물음표나 질문 패턴이 있는지 확인해 질문형 답변인지 판단
+    normalized = _normalize_korean_text(text)
+    return "?" in text or any(tag in normalized for patterns in QUESTION_TAG_PATTERNS.values() for tag in patterns)
+
+
+def _extract_question_tag(reply: str) -> str:
+    # 답변 속 질문을 미리 정의한 질문 의도 태그 중 하나로 분류
+    text = _normalize_korean_text(reply)
+
+    for tag, patterns in QUESTION_TAG_PATTERNS.items():
+        for pattern in patterns:
+            if pattern in text:
+                return tag
+    return ""
+
+
+def _extract_topics(text: str, limit: int = 3) -> list[str]:
+    # 사용자 입력에서 핵심 주제 후보 단어만 추려 최근 대화 주제로 저장
+    tokens = re.findall(r"[가-힣]{2,}", text or "")
+    stopwords = {
+        "오늘", "정말", "계속", "그냥", "지금", "이제", "너무", "조금",
+        "내가", "그게", "이거", "저거", "마음", "생각", "상황", "기분",
+    }
+
+    topics = []
+    for token in tokens:
+        if token in stopwords:
+            continue
+        if token not in topics:
+            topics.append(token)
+        if len(topics) >= limit:
+            break
+    return topics
+
+
+def _extract_known_facts(text: str) -> dict[str, list[str]]:
+    # 반복 질문 개선: 사용자가 이미 밝힌 감정과 원인 단서를 간단한 규칙으로 수집
+    normalized = _normalize_korean_text(text)
+    facts = {
+        "feelings": [],
+        "reasons": [],
+    }
+
+    # 감정 단서 보완: 이미 말한 감정을 더 넓게 저장해 같은 감정 확인 질문 반복을 줄임
+    feeling_patterns = {
+        "피곤": ("피곤", "지쳐", "지침", "방전", "기운없", "잠을못", "못자"),
+        "무기력": ("귀찮", "무기력", "아무것도하기싫", "하기싫", "의욕없", "멍해"),
+        "불안": ("불안", "걱정", "초조", "긴장", "두려", "무서", "막막", "부담"),
+        "분노": ("화나", "화가나", "짜증", "억울", "답답", "열받", "분해", "빡쳐"),
+        "슬픔": ("슬퍼", "우울", "속상", "허무", "서운", "외로", "공허", "침울"),
+        "기쁨": ("기뻐", "좋아", "행복", "신나", "뿌듯", "설레", "만족", "후련"),
+        "놀람": ("놀랐", "당황", "깜짝", "얼떨떨", "황당", "멘붕", "어이없"),
+    }
+    reason_patterns = {
+        "수면 부족": ("잠을못", "못자", "잠을제대로못", "잠이부족", "수면부족"),
+        "일정 과다": ("일정", "바쁘", "빡빡", "할일", "많아서", "쌓"),
+        "학업/업무 부담": ("과제", "시험", "수업", "일이많", "해야할일"),
+        "대인관계": ("친구", "가족", "사람", "관계", "말다툼"),
+        # 감정 단서 보완: 자주 나오는 원인도 저장해 같은 원인 질문을 줄임
+        "건강/컨디션": ("아파", "몸살", "두통", "컨디션", "병원", "몸이안좋"),
+        "돈/생활 부담": ("돈", "비용", "알바", "생활비", "월세", "부담"),
+        "진로/미래 고민": ("진로", "취업", "미래", "졸업", "면접", "포트폴리오"),
+    }
+
+    for label, patterns in feeling_patterns.items():
+        if any(pattern in normalized for pattern in patterns):
+            facts["feelings"].append(label)
+
+    for label, patterns in reason_patterns.items():
+        if any(pattern in normalized for pattern in patterns):
+            facts["reasons"].append(label)
+
+    return facts
+
+
+def _merge_known_facts(state: ChatState, facts: dict[str, list[str]]) -> None:
+    # 반복 질문 개선: 같은 단서를 중복 저장하지 않고 최근 단서만 유지
+    for key in ("feelings", "reasons"):
+        current = state.known_facts.setdefault(key, [])
+        for item in facts.get(key, []):
+            if item not in current:
+                current.append(item)
+        state.known_facts[key] = current[-6:]
+
+
+def _detect_emotion(text: str) -> tuple[str, float]:
+    # LLM 호출 전에 가볍게 감정과 확신도를 추정해 전략 선택에 사용
+    normalized = _normalize_korean_text(text)
+    scores = {}
+
+    for emotion, patterns in EMOTION_PATTERNS.items():
+        score = sum(1 for pattern in patterns if pattern in normalized)
+        if score:
+            scores[emotion] = score
+
+    if not scores:
+        return "unknown", 0.35
+
+    best_emotion, best_score = max(scores.items(), key=lambda item: item[1])
+    sorted_scores = sorted(scores.values(), reverse=True)
+    gap = best_score - sorted_scores[1] if len(sorted_scores) > 1 else best_score
+    confidence = min(0.95, 0.45 + 0.15 * best_score + 0.1 * max(gap, 0))
+    return best_emotion, confidence
+
+
+def _infer_conversation_stage(user_input: str, state: ChatState, emotion: str, confidence: float) -> str:
+    # 현재 턴이 공감 단계인지, 더 물어볼 단계인지, 정리 단계인지 결정
+    if not state.prev_reply:
+        return "rapport"
+    if state.question_budget <= 0:
+        return "organize"
+    if confidence < 0.55 and "emotion_check" not in state.recent_strategies[-1:]:
+        return "clarify"
+    if len(state.recent_strategies) >= 4:
+        return "close"
+    if emotion != "unknown" and confidence >= 0.75:
+        return "organize"
+    return "clarify"
+
+
+def _should_use_memory(related_memories, state: ChatState) -> bool:
+    # 과거 기억을 지금 턴에 꺼내도 자연스러운 조건인지 판단
+    if not related_memories:
+        return False
+    if "past_connection" in state.recent_strategies[-2:]:
+        return False
+    if state.conversation_stage not in {"organize", "close"}:
+        return False
+    return True
+
+
+def _can_ask_question(state: ChatState, strategy: str) -> bool:
+    # 질문 예산과 최근 흐름을 보고 지금 질문 전략을 써도 되는지 제한
+    if strategy not in QUESTION_STRATEGIES:
+        return True
+    if state.question_budget <= 0:
+        return False
+    recent = state.recent_strategies[-2:]
+    if len(recent) == 2 and all(item in QUESTION_STRATEGIES for item in recent):
+        return False
+    if strategy == "emotion_check" and state.emotion_confidence >= 0.75:
+        return False
+    if strategy == "emotion_check" and "emotion_check" in state.asked_question_tags:
+        return False
+    return True
+
+
+def _can_expand_topic(user_input: str, state: ChatState) -> bool:
+    # 아직 충분히 다루지 않은 새 주제가 있을 때만 확장 질문을 허용
+    new_topics = _extract_topics(user_input)
+    if not new_topics:
+        return False
+    if "expand" in state.recent_strategies[-1:]:
+        return False
+    return not all(topic in state.recent_topics for topic in new_topics)
+
+
+def select_response_strategy(
+    user_input: str,
+    state: ChatState,
+    related_memories=None,
+) -> str:
+    # 상태를 보고 이번 턴의 상담 전략 1개 선택
+    emotion, confidence = _detect_emotion(user_input)
+    stage = _infer_conversation_stage(user_input, state, emotion, confidence)
+    preferred_tag = EMOTION_REASON_TAG.get(emotion)
+
+    if stage == "rapport":
+        if confidence < 0.55 and _can_ask_question(state, "emotion_check"):
+            return "emotion_check"
+        return "empathy"
+
+    if stage == "clarify":
+        if confidence < 0.55 and _can_ask_question(state, "emotion_check"):
+            return "emotion_check"
+        if preferred_tag and preferred_tag not in state.asked_question_tags and _can_ask_question(state, "clarify"):
+            return "clarify"
+        return "organize"
+
+    if stage in {"organize", "close"}:
+        if _should_use_memory(related_memories, state):
+            return "past_connection"
+        if _can_ask_question(state, "expand") and _can_expand_topic(user_input, state):
+            return "expand"
+        return "organize"
+
+    return "organize"
+
+
+def _next_strategy_candidates(strategy: str, state: ChatState, related_memories=None) -> list[str]:
+    # 현재 전략이 부적절할 때 갈아탈 다음 후보 순서를 정의
+    candidates = {
+        "emotion_check": ["organize", "empathy", "clarify"],
+        "clarify": ["organize", "empathy", "past_connection", "expand"],
+        "expand": ["organize", "past_connection", "empathy"],
+        "organize": ["empathy", "past_connection", "clarify"],
+        "past_connection": ["organize", "empathy", "clarify"],
+        "empathy": ["organize", "clarify", "past_connection"],
+    }.get(strategy, ["organize", "empathy"])
+
+    filtered = []
+    for candidate in candidates:
+        if candidate == "past_connection" and not _should_use_memory(related_memories, state):
+            continue
+        if candidate in QUESTION_STRATEGIES and not _can_ask_question(state, candidate):
+            continue
+        filtered.append(candidate)
+
+    return filtered or ["organize"]
+
+
+def _choose_refine_strategy(strategy: str, diagnostics: dict, state: ChatState, related_memories=None) -> str:
+    # 반복, 질문 과다, 공감 부족 같은 진단 결과에 따라 refine 전략을 다시 선택
+    issues_text = " ".join(diagnostics.get("issues", []))
+    flags = set(diagnostics.get("repeat_flags", [])) | set(diagnostics.get("rule_flags", []))
+
+    if (
+        "similar_reply" in flags
+        or "semantic_question_repeat" in flags
+        or "same_question_tag" in flags
+        or "generic_question_repeat" in flags
+        or "known_feeling_repeat" in flags
+        or "known_reason_repeat" in flags
+        or "generic_followup_repeat" in flags
+    ):
+        return _next_strategy_candidates(strategy, state, related_memories)[0]
+    if "question_heavy" in flags:
+        return "organize"
+    if "honorific" in flags:
+        return strategy
+    if "공감" in issues_text:
+        return "empathy" if strategy != "empathy" else "organize"
+
+    return strategy
+
+
+def _build_system_prompt_for_strategy(strategy: str, state: ChatState, diagnostics: dict | None = None) -> str:
+    # 고정 시스템 프롬프트에 현재 전략과 세션 상태를 덧붙여 모델 행동을 좁힘
+    extra_lines = [
+        f"[이번 전략] {strategy}",
+        f"[전략 가이드] {STRATEGY_GUIDELINES[strategy]}",
+        f"[대화 단계] {state.conversation_stage}",
+        f"[남은 질문 예산] {state.question_budget}",
+        f"[이미 사용한 질문 태그] {', '.join(state.asked_question_tags) if state.asked_question_tags else '없음'}",
+        # 반복 질문 개선: 모델이 이미 확인된 맥락을 다시 캐묻지 않도록 명시
+        f"[이미 확인된 감정] {', '.join(state.known_facts.get('feelings', [])) if state.known_facts.get('feelings') else '없음'}",
+        f"[이미 확인된 원인] {', '.join(state.known_facts.get('reasons', [])) if state.known_facts.get('reasons') else '없음'}",
+    ]
+
+    if diagnostics:
+        extra_lines.append(f"[이번 수정 전략] {strategy}")
+        extra_lines.append(f"[반드시 피할 문제] {', '.join(diagnostics.get('issues', [])) or '없음'}")
+
+    return SYSTEM_PROMPT + "\n\n" + "\n".join(extra_lines)
+
+
+def _build_user_prompt(
+    user_input: str,
+    strategy: str,
+    state: ChatState,
+    related_memories=None,
+    draft: str | None = None,
+    diagnostics: dict | None = None,
+) -> str:
+    # 현재 입력, 직전 답변, 상태, 진단 정보를 합쳐 사용자 프롬프트를 제작
+    parts = []
+
+    if strategy == "past_connection":
+        memory_block = _format_related_memories(related_memories)
+        if memory_block:
+            parts.append(memory_block)
+
+    parts.append(f"[현재 사용자 말]\n{user_input}")
+    parts.append(f"[추정 감정]\n{state.current_emotion} ({state.emotion_confidence:.2f})")
+    parts.append(f"[최근 전략]\n{', '.join(state.recent_strategies[-3:]) if state.recent_strategies else '없음'}")
+    parts.append(f"[최근 핵심 주제]\n{', '.join(state.recent_topics[-5:]) if state.recent_topics else '없음'}")
+    # 반복 질문 개선: 답변 생성 시 이미 답한 감정/원인을 컨텍스트로 제공
+    parts.append(f"[이미 확인된 감정]\n{', '.join(state.known_facts.get('feelings', [])) if state.known_facts.get('feelings') else '없음'}")
+    parts.append(f"[이미 확인된 원인]\n{', '.join(state.known_facts.get('reasons', [])) if state.known_facts.get('reasons') else '없음'}")
+
+    if state.prev_reply:
+        parts.append(f"[직전 답변]\n{state.prev_reply}")
+
+    if draft is not None:
+        parts.append(f"[기존 답변]\n{draft}")
+
+    if diagnostics:
+        issue_text = ", ".join(diagnostics.get("issues", [])) or "없음"
+        flag_text = ", ".join(diagnostics.get("repeat_flags", []) + diagnostics.get("rule_flags", [])) or "없음"
+        parts.append(f"[수정할 문제]\n{issue_text}")
+        parts.append(f"[진단 플래그]\n{flag_text}")
+
+    return "\n\n".join(parts)
+
+
+def _generate_reply(
+    user_input: str,
+    strategy: str,
+    state: ChatState,
+    related_memories=None,
+    temperature: float = 0.5,
+) -> str:
+    # 1차 답변 생성 
+    system_prompt = _build_system_prompt_for_strategy(strategy, state)
+    user_prompt = _build_user_prompt(user_input, strategy, state, related_memories=related_memories)
+    return _call_chat(system_prompt, user_prompt, temperature=temperature)
+
+
+def _is_similar_reply(
+    current_reply: str,
+    previous_reply: str | None,
+    current_strategy: str | None = None,
+    previous_strategy: str | None = None,
+) -> bool:
+    if not previous_reply:
+        return False
+
+    cur = _normalize_korean_text(current_reply)
+    prev = _normalize_korean_text(previous_reply)
+
+    if not cur or not prev:
+        return False
+
+    if cur == prev:
+        return True
+
+    overlap = 0
+    for signal_group in REPLY_SIMILARITY_SIGNALS + EMPATHY_SIGNALS:
+        if any(pattern in cur for pattern in signal_group) and any(pattern in prev for pattern in signal_group):
+            overlap += 1
+
+    current_tag = _extract_question_tag(current_reply)
+    previous_tag = _extract_question_tag(previous_reply)
+
+    if current_tag and current_tag == previous_tag:
+        overlap += 2
+
+    if current_strategy and previous_strategy and current_strategy == previous_strategy:
+        overlap += 1
+
+    return overlap >= 2
+
+
+def detect_repeat_risk(reply: str, state: ChatState, strategy: str) -> dict:
+    # 반복 위험을 플래그 형태로 정리
+    issues = []
+    flags = []
+    current_tag = _extract_question_tag(reply)
+    previous_strategy = state.recent_strategies[-1] if state.recent_strategies else None
+    has_known_feeling = bool(state.known_facts.get("feelings"))
+    has_known_reason = bool(state.known_facts.get("reasons"))
+
+    if _is_similar_reply(reply, state.prev_reply, strategy, previous_strategy):
+        issues.append("직전 답변과 표현이 지나치게 비슷함")
+        flags.append("similar_reply")
+
+    if current_tag and current_tag in state.asked_question_tags:
+        issues.append("이미 했던 핵심 질문을 반복하고 있음")
+        flags.append("same_question_tag")
+
+    # 반복 질문 개선: 질문 자체가 아니라 이미 답한 감정/원인을 되묻는 질문만 문제로 표시
+    if current_tag == "current_feeling_repeat" and has_known_feeling:
+        issues.append("이미 말한 감정을 다시 묻고 있음")
+        flags.append("known_feeling_repeat")
+
+    if current_tag == "reason_repeat" and has_known_reason:
+        issues.append("이미 말한 원인을 다시 묻고 있음")
+        flags.append("known_reason_repeat")
+
+    if current_tag == "tell_more_generic" and (has_known_feeling or has_known_reason):
+        issues.append("이미 나온 맥락에서 막연하게 추가 설명만 요구하고 있음")
+        flags.append("generic_followup_repeat")
+
+    normalized = _normalize_korean_text(reply)
+    if any(pattern in normalized for pattern in GENERIC_REPEAT_PATTERNS):
+        issues.append("일반적인 질문을 반복하고 있음")
+        flags.append("generic_question_repeat")
+
+    if current_tag and previous_strategy in QUESTION_STRATEGIES and strategy in QUESTION_STRATEGIES:
+        previous_tag = _extract_question_tag(state.prev_reply or "")
+        if previous_tag and previous_tag == current_tag:
+            flags.append("semantic_question_repeat")
+            if "이미 했던 핵심 질문을 반복하고 있음" not in issues:
+                issues.append("같은 의미의 질문을 다시 하고 있음")
+
+    return {
+        "issues": issues,
+        "repeat_flags": flags,
+        "question_tag": current_tag,
+    }
+
+
+def _evaluate_reply(
+    user_input: str,
+    reply: str,
+    state: ChatState,
+    strategy: str,
+) -> dict:
+    eval_system_prompt = """
+너는 상담 답변을 평가하는 평가자다.
+
+평가 방식:
+- 기본 점수는 10점이다.
+- 아래 항목에서 문제가 보이면 감점한다.
+- 최종 score는 0~10점 사이 정수로 한다.
+
+감점 기준:
+
+1. 감정 공감 부족
+- 공감 표현이 거의 없으면 2점 감점
+- 공감이 약하거나 형식적이면 1점 감점
+
+2. 맥락 이해 부족
+- 사용자의 상황이나 감정을 잘못 이해하면 2점 감점
+- 맥락 반영이 부족하면 1점 감점
+
+3. 규칙 미준수
+- 반말이 아니면 1점 감점
+- 1~3문장이 아니면 1점 감점
+
+4. 질문 적절성 부족
+- 질문만 하고 공감이 부족하면 2점 감점
+- "무슨 일이 있었어?" 같은 일반적 질문 반복 시 1점 감점
+- 이미 했던 핵심 질문을 다시 물으면 2점 감점
+- 질문이 어색하거나 불필요하면 1점 감점
+
+5. 표현 문제
+- 너무 짧거나 단순하면 1점 감점
+- 직전 답변과 표현이 비슷하면 1점 감점
+- 표현이 부자연스럽거나 오타가 있으면 1점 감점
+
+출력 형식:
+{
+  "score": 0,
+  "issues": ["문제1", "문제2"]
+}
+
+규칙:
+- score는 감점 결과를 반영한 최종 점수만 넣는다
+- score는 0~10 점 사이 정수
+- issues는 실제 감점 사유만 한국어 짧은 문장으로 1~3개 작성
+- 문제 없으면 issues는 빈 리스트로 한다
+- JSON 외 다른 텍스트 절대 금지
+"""
+
+    eval_user_prompt = f"""
+[사용자 입력]
+{user_input}
+
+[직전 답변]
+{state.prev_reply or "없음"}
+
+[이미 사용한 질문 태그]
+{", ".join(state.asked_question_tags) if state.asked_question_tags else "없음"}
+
+[이번 전략]
+{strategy}
+
+[상담 답변]
+{reply}
+"""
+
+    llm_score = 5.0
+    issues = []
+    result = ""
+
+    try:
+        result = _call_chat(eval_system_prompt, eval_user_prompt, temperature=0.0)
+        match = re.search(r"\{.*\}", result, re.DOTALL)
+        if not match:
+            raise ValueError("JSON 없음")
+        parsed = json.loads(match.group())
+        llm_score = float(parsed.get("score", 5))
+        raw_issues = parsed.get("issues", [])
+        if isinstance(raw_issues, list):
+            issues.extend(str(item).strip() for item in raw_issues if str(item).strip())
+    except Exception as error:
+        if SHOW_INTERNAL_LOG:
+            print("평가 파싱 오류:", error)
+            print("LLM raw:", result)
+        issues.append("평가 파싱 오류")
+
+    #  로컬 규칙으로 한 번 더 수정
+    repeat_info = detect_repeat_risk(reply, state, strategy)
+    issues.extend(item for item in repeat_info["issues"] if item not in issues)
+
+    rule_flags = []
+    sentences = _sentence_count(reply)
+    if sentences < 1 or sentences > 3:
+        rule_flags.append("sentence_limit")
+        issues.append("문장 수 규칙을 벗어남")
+
+    if _has_critical_issue(reply):
+        rule_flags.append("honorific")
+        if "반말이 아님" not in issues:
+            issues.append("반말이 아님")
+
+    # 반복 질문 개선: 모든 질문을 나쁘게 보지 않고, 새 정보 없이 질문만 던질 때만 감점
+    is_repeat_question = bool(set(repeat_info["repeat_flags"]) & {
+        "same_question_tag",
+        "semantic_question_repeat",
+        "generic_question_repeat",
+        "known_feeling_repeat",
+        "known_reason_repeat",
+        "generic_followup_repeat",
+    })
+    if _contains_question(reply) and strategy in QUESTION_STRATEGIES and is_repeat_question:
+        rule_flags.append("question_repeat")
+        if "반복 질문 위주 답변" not in issues:
+            issues.append("반복 질문 위주 답변")
+
+    score = llm_score
+    score -= 0.5 * len(set(issues))
+    score -= 0.5 * len(set(rule_flags))
+    score -= 0.5 * len(set(repeat_info["repeat_flags"]))
+    score = max(0, min(10, score))
+
+    return {
+        "score": score,
+        "issues": issues[:3],
+        "repeat_flags": repeat_info["repeat_flags"],
+        "rule_flags": rule_flags,
+        "question_tag": repeat_info["question_tag"],
+    }
+
+
+def _refine_reply(
+    user_input: str,
+    draft: str,
+    diagnostics: dict,
+    strategy: str,
+    state: ChatState,
+    related_memories=None,
+) -> tuple[str, str]:
+    next_strategy = _choose_refine_strategy(strategy, diagnostics, state, related_memories)
+    refine_system_prompt = _build_system_prompt_for_strategy(next_strategy, state, diagnostics=diagnostics)
+    refine_user_prompt = _build_user_prompt(
+        user_input,
+        next_strategy,
+        state,
+        related_memories=related_memories,
+        draft=draft,
+        diagnostics=diagnostics,
+    )
+    return _call_chat(refine_system_prompt, refine_user_prompt, temperature=0.3), next_strategy
+
+
+def _has_critical_issue(text: str) -> bool:
+    return bool(re.search(r"(요[.!?]?$|니다|까요|세요|겠어요)", text))
+
+
+def update_state_from_turn(
+    user_input: str,
+    reply: str,
+    strategy: str,
+    diagnostics: dict,
+    state: ChatState,
+) -> None:
+    #결과를 세션 상태에 반영
+    emotion, confidence = _detect_emotion(user_input)
+    state.current_emotion = emotion
+    state.emotion_confidence = confidence
+    # 반복 질문 개선: 다음 턴에서 같은 감정/원인을 되묻지 않도록 사용자 발화 단서를 누적
+    _merge_known_facts(state, _extract_known_facts(user_input))
+
+    for topic in _extract_topics(user_input):
+        if topic not in state.recent_topics:
+            state.recent_topics.append(topic)
+    state.recent_topics = state.recent_topics[-5:]
+
+    state.recent_strategies.append(strategy)
+    state.recent_strategies = state.recent_strategies[-5:]
+
+    question_tag = diagnostics.get("question_tag")
+    if question_tag and question_tag not in state.asked_question_tags:
+        state.asked_question_tags.append(question_tag)
+    state.asked_question_tags = state.asked_question_tags[-8:]
+
+    repeated_question_flags = {
+        "same_question_tag",
+        "semantic_question_repeat",
+        "generic_question_repeat",
+        "known_feeling_repeat",
+        "known_reason_repeat",
+        "generic_followup_repeat",
+    }
+    has_repeated_question = bool(set(diagnostics.get("repeat_flags", [])) & repeated_question_flags)
+
+    # 반복 질문 개선: 좋은 질문은 허용하고, 반복/막연한 질문일 때만 질문 예산을 줄임
+    if has_repeated_question:
+        state.question_budget = max(0, state.question_budget - 1)
+    elif strategy in QUESTION_STRATEGIES:
+        state.question_budget = max(1, state.question_budget - 1)
+    else:
+        state.question_budget = min(2, state.question_budget + 1)
+
+    if strategy in {"emotion_check", "clarify"}:
+        state.conversation_stage = "clarify"
+    elif strategy in {"organize", "past_connection"}:
+        state.conversation_stage = "close" if len(state.recent_strategies) >= 4 else "organize"
+    else:
+        state.conversation_stage = "rapport"
+
+    state.prev_reply = reply
+
+
+def chat_with_counselor(
+    user_input: str,
+    related_memories=None,
+    state: ChatState | None = None
+) -> str:
+    # 전체 실행 흐름
+    user_input = _safe_text(user_input)
+    state = state or ChatState()
+    # 반복 질문 개선: 이번 사용자 입력의 감정/원인도 답변 생성 전에 반영
+    _merge_known_facts(state, _extract_known_facts(user_input))
+
+    emotion, confidence = _detect_emotion(user_input)
+    state.current_emotion = emotion
+    state.emotion_confidence = confidence
+    state.conversation_stage = _infer_conversation_stage(user_input, state, emotion, confidence)
+    strategy = select_response_strategy(user_input, state, related_memories=related_memories)
+
+    if SHOW_INTERNAL_LOG:
+        print("상담 LLM 호출 시작")
+        print(f"[선택 전략] {strategy}")
+        print(f"[감정 추정] {state.current_emotion} ({state.emotion_confidence:.2f})")
+        print(f"[대화 단계] {state.conversation_stage}")
+
+    try:
+        draft = _generate_reply(user_input, strategy, state, related_memories=related_memories, temperature=0.5)
+
+        if _has_critical_issue(draft):
+            honorific_diag = {
+                "issues": ["반말이 아님"],
+                "repeat_flags": [],
+                "rule_flags": ["honorific"],
+                "question_tag": _extract_question_tag(draft),
+                "score": 5.0,
+            }
+            draft, strategy = _refine_reply(
+                user_input=user_input,
+                draft=draft,
+                diagnostics=honorific_diag,
+                strategy=strategy,
+                state=state,
+                related_memories=related_memories,
+            )
+
+        diagnostics = _evaluate_reply(user_input, draft, state, strategy)
+        best_reply = draft
+        best_strategy = strategy
+        best_diagnostics = diagnostics
+
+        if SHOW_INTERNAL_LOG:
+            print(f"[초안 답변] {draft}")
+            print(f"[초안 전략] {strategy}")
+            print(f"[초안 점수] {diagnostics['score']}")
+            print(f"[초안 문제점] {diagnostics['issues']}")
+
+        # 점수가 낮거나 반복/형식 문제가 있으면 최대 MAX_REFINE_ROUNDS만큼 다시 시도
+        if DEBUG_SELF_REFINE:
+            current_reply = draft
+            current_strategy = strategy
+            current_diagnostics = diagnostics
+
+            for index in range(MAX_REFINE_ROUNDS):
+                if current_diagnostics["score"] >= REFINE_THRESHOLD and not current_diagnostics["repeat_flags"] and not current_diagnostics["rule_flags"]:
+                    break
+
+                refined, next_strategy = _refine_reply(
+                    user_input=user_input,
+                    draft=current_reply,
+                    diagnostics=current_diagnostics,
+                    strategy=current_strategy,
+                    state=state,
+                    related_memories=related_memories,
+                )
+                refined_diagnostics = _evaluate_reply(user_input, refined, state, next_strategy)
+
+                if next_strategy != current_strategy:
+                    refined_diagnostics["score"] = min(10, refined_diagnostics["score"] + 0.5)
+                if len(refined_diagnostics["issues"]) < len(current_diagnostics["issues"]):
+                    refined_diagnostics["score"] = min(10, refined_diagnostics["score"] + 0.5)
+
+                if SHOW_INTERNAL_LOG:
+                    print(f"[Refine {index + 1} 답변] {refined}")
+                    print(f"[Refine {index + 1} 전략] {next_strategy}")
+                    print(f"[Refine {index + 1} 점수] {refined_diagnostics['score']}")
+                    print(f"[Refine {index + 1} 문제점] {refined_diagnostics['issues']}")
+
+                if refined_diagnostics["score"] > best_diagnostics["score"]:
+                    best_reply = refined
+                    best_strategy = next_strategy
+                    best_diagnostics = refined_diagnostics
+
+                current_reply = refined
+                current_strategy = next_strategy
+                current_diagnostics = refined_diagnostics
+
+        update_state_from_turn(
+            user_input=user_input,
+            reply=best_reply,
+            strategy=best_strategy,
+            diagnostics=best_diagnostics,
+            state=state,
+        )
+
+        if SHOW_INTERNAL_LOG:
+            print("상담 LLM 호출 완료")
+
+        return best_reply
+
+    except Exception as error:
+        if SHOW_INTERNAL_LOG:
+            print("상담 호출 오류:", error)
+        return FALLBACK_REPLY
+
+
+if __name__ == "__main__":
+    print("상담사 AI와 대화를 시작합니다.")
+    print("종료하려면 'exit'을 입력하세요.\n")
+
+    state = ChatState()
+
+    while True:
+        user_text = input("나: ").strip()
+
+        if user_text.lower() == "exit":
+            state.reset()
+            print("상담을 종료합니다.")
+            break
+
+        reply = chat_with_counselor(
+            user_input=user_text,
+            related_memories=None,
+            state=state
+        )
+        print(f"\n상담사: {reply}\n")
