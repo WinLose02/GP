@@ -7,9 +7,12 @@ from core.summary import (
     detect_emotion,
     extract_keywords,
 )
-from core.chat_with_counselor import chat_with_counselor
+from core.chat_with_counselor import ChatState, chat_with_counselor
 
 app = FastAPI()
+
+# 사용자별 상담 상태를 서버 메모리에 보관해 같은 질문과 답변이 반복 방지
+chat_states: dict[str, ChatState] = {}
 
 
 class DiaryRequest(BaseModel):
@@ -63,7 +66,9 @@ def analyze_diary(req: DiaryRequest):
         keywords = []
 
     try:
-        counsel = chat_with_counselor(refined_diary)
+        # 같은 user_id의 이전 상담 흐름을 재사용해 반복 방지 정보가 유지
+        state = chat_states.setdefault(req.user_id, ChatState())
+        counsel = chat_with_counselor(refined_diary, state=state)
     except Exception as e:
         print("chat_with_counselor error:", e)
         counsel = "오늘도 정말 애썼어. 네 마음이 조금은 가벼워졌으면 좋겠어."
