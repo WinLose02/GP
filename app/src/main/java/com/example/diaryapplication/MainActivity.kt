@@ -3,6 +3,8 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
@@ -94,7 +96,33 @@ fun RootNav(deepLink: String? = null) {
             // currentUser가 null이면 -> 로그인이 안된 상태 -> 온보딩으로 이동
             Route.Onboarding.path
         },
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
+
+        // 새 화면으로 이동할 때 : 오른쪽 끝(it)에서 슬라이드 인 + 페이드 인
+        enterTransition = {
+            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) +
+                    fadeIn(animationSpec = tween(300))
+        },
+
+
+        // 현재 화면이 뒤로 밀릴 때 : 왼쪽으로 1/3만 살짝 밀리며 페이드 아웃
+        // 1/3만 밀리는 이유 : 완전히 사라지면 어색하고, 살짝 물러나는 느낌이 자연스러움
+        exitTransition = {
+            slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween(300)) +
+                    fadeOut(animationSpec = tween(300))
+        },
+
+        // 뒤로 가기로 돌아올 때 : 왼쪽 1/3 위치에서 제자리로 슬라이드 인 + 페이드 인
+        popEnterTransition = {
+            slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween(300)) +
+                    fadeIn(animationSpec = tween(300))
+        },
+
+        // 뒤로 가기로 현재 화면이 닫힐 때 : 오른쪽 끝으로 슬라이드 아웃 + 페이드 아웃
+        popExitTransition = {
+            slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300)) +
+                    fadeOut(animationSpec = tween(300))
+        }
     ) {
         composable(Route.Onboarding.path) {
             OnboardingScreen(
@@ -105,7 +133,13 @@ fun RootNav(deepLink: String? = null) {
                 }
             )
         }
-        composable(Route.Login.path) {
+        composable(
+            route = Route.Login.path,
+            // 로그인 성공 후 Main으로 이동할 때 Login이 빠르게 사라지는 것을 막기 위해
+            // exitTransition을 600ms 페이드로 오버라이드
+            // NavHost 기본값(300ms 슬라이드)을 그대로 두면 Login 퇴장이 너무 빨라 Main 진입이 묻힘
+            exitTransition = { fadeOut(animationSpec = tween(600)) }
+        ) {
             LoginScreen(
                 onBack = { /* 필요하면 종료 처리 */ },
                 onLoginSuccess = {
@@ -168,7 +202,13 @@ fun RootNav(deepLink: String? = null) {
                 }
             )
         }
-        composable(Route.Main.path) {
+        composable(
+            route = Route.Main.path,
+            // 로그인 성공 후 메인 진입은 슬라이드 없이 페이드만 사용
+            // 600ms로 여유 있게 설정해 자연스럽게 앱으로 들어오는 느낌을 줌
+            enterTransition = { fadeIn(animationSpec = tween(600)) },
+            exitTransition = { fadeOut(animationSpec = tween(600)) }
+        ) {
             // RootNav의 nav를 사용하는 onLogout 콜백을 MainScaffold에 전달
             // MainScaffold 내부 nav는 "login"을 모르지만, 여기 nav는 알고 있음
             MainScaffold(

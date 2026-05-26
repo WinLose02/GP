@@ -4,8 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -45,7 +45,7 @@ fun FindIdScreen(
                 title = { Text("아이디 찾기") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Outlined.ArrowBack, null)
+                        Icon(Icons.Rounded.ArrowBack, null)
                     }
                 }
             )
@@ -78,7 +78,7 @@ fun FindIdScreen(
                 readOnly = true,
                 trailing = {
                     IconButton(onClick = { showPicker = true }) {
-                        Icon(Icons.Outlined.DateRange, null)
+                        Icon(Icons.Rounded.DateRange, null)
                     }
                 } // 오른쪽 끝에 달력 아이콘을 표시
             )

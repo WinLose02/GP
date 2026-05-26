@@ -6,7 +6,11 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,10 +19,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.background
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.Chat
+import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
@@ -42,19 +46,19 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         OnboardPage("매일의 감정을 기록하세요", "캘린더로 쉽게 일기를 작성하고,\n날씨, 운동시간, 공부시간 등\n하루를 다양하게 기록할 수 있어요",
             Color(0xFF2B7FFF),
             Color(0xFF00D3F3),
-            Icons.AutoMirrored.Outlined.MenuBook),
+            Icons.AutoMirrored.Rounded.MenuBook),
         OnboardPage("AI 챗봇과 대화해요", "고민이 있거나 대화가 필요할 때,\nAI 챗봇이 언제든지 당신의 이야기를\n들어드려요",
             Color(0xFFAD46FF),
             Color(0xFFFB64B6),
-            Icons.AutoMirrored.Outlined.Chat),
+            Icons.AutoMirrored.Rounded.Chat),
         OnboardPage("나의 감정을 분석해요", "주간, 월간 요약으로\n나의 감정 패턴과 활동을 확인하고\n더 나은 하루를 만들어가요",
             Color(0xFFFF6900),
             Color(0xFFFDC700),
-            Icons.Outlined.BarChart),
+            Icons.Rounded.Insights),
         OnboardPage("안전하게 보호해요", "PIN 번호 설정으로 일기를 보호하고,\n알림 설정으로 매일 일기 작성을\n습관으로 만들어보세요",
             Color(0xFF00C950),
             Color(0xFF00D492),
-            Icons.Outlined.Person),
+            Icons.Rounded.Person),
     )
 
     val pager = rememberPagerState(pageCount = { pages.size }) // 현재 몇 번째 페이지인지
@@ -214,7 +218,16 @@ private fun PagerDots(current: Int, total: Int) {
         modifier = Modifier.fillMaxWidth()
     ) {
         repeat(total) { i ->
-            val w = if (i == current) 18.dp else 6.dp
+            // 현재 페이지 점은 18dp, 나머지는 6dp로 목표값을 설정
+            // spring : 페이지 전환 시 도트가 통통 튀듯 확장/축소됨
+            val w by animateDpAsState(
+                targetValue = if (i == current) 18.dp else 6.dp,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "dotWidth"
+            )
             Surface(
                 color = if (i == current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 shape = RoundedCornerShape(999.dp),

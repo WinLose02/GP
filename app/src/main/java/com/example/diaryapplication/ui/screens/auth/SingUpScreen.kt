@@ -5,8 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -50,7 +50,7 @@ fun SignUpScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         // 뒤로가기 아이콘 클릭 시, onBack() 실행
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = null)
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = null)
                     }
                 }
             )
@@ -91,7 +91,7 @@ fun SignUpScreen(
                 trailing = {
                     IconButton(onClick = { showPicker = true }) { // 아이콘을 클릭 시, showPicker=true로 설정해서
                         // 캘린더 다이얼로그를 띄어줄 수 있게 해줌
-                        Icon(Icons.Outlined.DateRange, contentDescription = null)
+                        Icon(Icons.Rounded.DateRange, contentDescription = null)
                     } // 오른쪽 끝 부분에 달력 아이콘 표시
                 }
             )

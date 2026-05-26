@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>마이페이지 디자인 미리보기</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Noto Sans KR', sans-serif;
+    background: #d0d4de;
+    padding: 40px 20px 60px;
+    display: flex; flex-direction: column; align-items: center; gap: 24px;
+  }
+  h1 { font-size: 12px; font-weight: 700; color: #888; letter-spacing: 0.1em; text-transform: uppercase; }
+  .row { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .tag { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 12px; }
+  .tag-a { color: #3D7BF4; background: #EEF3FF; }
+  .tag-b { color: #7C3AED; background: #F5F3FF; }
+  .tag-c { color: #0E7564; background: #ECFDF5; }
+  .phone-label { font-size: 13px; font-weight: 700; color: #1a1a2e; }
+  .desc { font-size: 11px; color: #6b7280; text-align: center; max-width: 240px; line-height: 1.7; }
+
+  .phone {
+    width: 295px; height: 640px;
+    border-radius: 38px;
+    overflow: hidden;
+    box-shadow: 0 24px 56px rgba(0,0,0,0.18);
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+
+  /* ═══════════════════════════════════
+     A타입 — Gradient Hero + 통계 통합
+  ═══════════════════════════════════ */
+  .phone-a {
+    background: #F4F6FB;
+  }
+
+  .a-hero {
+    background: linear-gradient(145deg, #3D7BF4 0%, #6366F1 50%, #8B5CF6 100%);
+    padding: 28px 18px 56px;
+    position: relative;
+    overflow: visible;
+  }
+  .a-hero-title {
+    font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.7);
+    letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 20px;
+  }
+  .a-avatar-row { display: flex; align-items: center; gap: 14px; }
+  .a-avatar {
+    width: 60px; height: 60px; border-radius: 22px;
+    background: rgba(255,255,255,0.2);
+    border: 2px solid rgba(255,255,255,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: white;
+    flex-shrink: 0;
+  }
+  .a-name { font-size: 17px; font-weight: 800; color: white; }
+  .a-email { font-size: 11px; color: rgba(255,255,255,0.75); margin-top: 3px; }
+  .a-edit-btn {
+    margin-left: auto;
+    width: 32px; height: 32px; border-radius: 10px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: white; flex-shrink: 0;
+  }
+
+  /* 히어로 아래쪽 곡면 절개 */
+  .a-hero-curve {
+    position: absolute; bottom: -1px; left: 0; right: 0; height: 36px;
+    background: #F4F6FB;
+    border-radius: 999px 999px 0 0;
+  }
+
+  /* 통계 카드 — 히어로 위에 겹쳐 표시 */
+  .a-stats-float {
+    display: flex; gap: 10px;
+    margin: -32px 14px 0;
+    position: relative; z-index: 2;
+  }
+  .a-stat {
+    flex: 1; background: white;
+    border-radius: 16px;
+    padding: 13px 10px;
+    text-align: center;
+    box-shadow: 0 6px 20px rgba(61,123,244,0.14);
+  }
+  .a-stat-val { font-size: 22px; font-weight: 800; color: #3D7BF4; }
+  .a-stat-lbl { font-size: 10px; color: #9ca3af; margin-top: 3px; }
+
+  .a-body {
+    flex: 1; overflow: hidden;
+    padding: 14px 14px 0;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .a-section-lbl {
+    font-size: 11px; font-weight: 700; color: #9ca3af;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 0 2px;
+  }
+  .a-card {
+    background: white; border-radius: 18px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    overflow: hidden;
+  }
+  .a-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 14px;
+  }
+  .a-row + .a-row { border-top: 1px solid #F3F4F8; }
+  .a-icon-box {
+    width: 38px; height: 38px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0;
+  }
+  .a-row-text { flex: 1; }
+  .a-row-title { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+  .a-row-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+  .a-chevron { font-size: 14px; color: #c4ccd6; }
+  .a-toggle {
+    width: 42px; height: 24px; border-radius: 999px;
+    background: linear-gradient(90deg, #3D7BF4, #8B5CF6);
+    position: relative; flex-shrink: 0;
+  }
+  .a-toggle-knob {
+    width: 20px; height: 20px; border-radius: 50%; background: white;
+    position: absolute; top: 2px; right: 2px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
+  .a-toggle-off {
+    width: 42px; height: 24px; border-radius: 999px;
+    background: #E5E7EB;
+    position: relative; flex-shrink: 0;
+  }
+  .a-toggle-off .a-toggle-knob { right: auto; left: 2px; }
+
+  .a-logout {
+    margin: 6px 14px 14px;
+    border: 1.5px solid #FF3B30;
+    border-radius: 16px;
+    padding: 13px;
+    text-align: center;
+    font-size: 13px; font-weight: 700; color: #FF3B30;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+
+  /* ═══════════════════════════════════
+     B타입 — 그라디언트 배경 + 글라스 카드
+  ═══════════════════════════════════ */
+  .phone-b {
+    background: linear-gradient(165deg, #EEF3FF 0%, #F5F0FF 55%, #FFF0F8 100%);
+  }
+
+  .b-header {
+    padding: 22px 18px 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .b-header-title { font-size: 16px; font-weight: 800; color: #1a1a2e; }
+
+  .b-profile-card {
+    margin: 0 14px 14px;
+    background: linear-gradient(135deg, #3D7BF4, #8B5CF6);
+    border-radius: 22px;
+    padding: 18px;
+    box-shadow: 0 8px 28px rgba(61,123,244,0.28);
+    display: flex; align-items: center; gap: 14px;
+  }
+  .b-avatar {
+    width: 56px; height: 56px; border-radius: 20px;
+    background: rgba(255,255,255,0.2);
+    border: 2px solid rgba(255,255,255,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 21px; font-weight: 800; color: white; flex-shrink: 0;
+  }
+  .b-pname { font-size: 16px; font-weight: 800; color: white; }
+  .b-pemail { font-size: 11px; color: rgba(255,255,255,0.75); margin-top: 3px; }
+  .b-edit-pill {
+    margin-left: auto;
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 999px; padding: 5px 12px;
+    font-size: 11px; color: white; font-weight: 600; flex-shrink: 0;
+  }
+
+  .b-stats-row {
+    display: flex; gap: 9px; margin: 0 14px 14px;
+  }
+  .b-stat-card {
+    flex: 1;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(255,255,255,0.9);
+    border-radius: 16px;
+    padding: 13px 10px; text-align: center;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+  }
+  .b-stat-icon { font-size: 18px; margin-bottom: 5px; }
+  .b-stat-val { font-size: 20px; font-weight: 800; color: #1a1a2e; }
+  .b-stat-lbl { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+
+  .b-section-lbl {
+    font-size: 11px; font-weight: 700; color: #9ca3af;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 0 16px 6px;
+  }
+  .b-card {
+    margin: 0 14px 12px;
+    background: rgba(255,255,255,0.65);
+    border: 1px solid rgba(255,255,255,0.9);
+    border-radius: 18px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+    overflow: hidden;
+  }
+  .b-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 14px;
+  }
+  .b-row + .b-row {
+    border-top: 1px solid rgba(255,255,255,0.7);
+  }
+  .b-icon-box {
+    width: 36px; height: 36px; border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  .b-row-text { flex: 1; }
+  .b-row-title { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+  .b-row-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+  .b-logout {
+    margin: 2px 14px 14px;
+    background: rgba(255,59,48,0.08);
+    border: 1px solid rgba(255,59,48,0.25);
+    border-radius: 16px; padding: 13px;
+    text-align: center;
+    font-size: 13px; font-weight: 700; color: #FF3B30;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+
+  /* ═══════════════════════════════════
+     C타입 — 다크 그라디언트 + 네온 포인트
+  ═══════════════════════════════════ */
+  .phone-c {
+    background: linear-gradient(175deg, #0F0F1A 0%, #1A1030 50%, #0D1525 100%);
+  }
+
+  .c-header {
+    padding: 22px 18px 10px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .c-header-title { font-size: 16px; font-weight: 800; color: white; }
+  .c-header-sub { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+  .c-profile-card {
+    margin: 0 14px 14px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 22px;
+    padding: 18px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .c-avatar {
+    width: 56px; height: 56px; border-radius: 20px;
+    background: linear-gradient(135deg, #3D7BF4, #8B5CF6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 21px; font-weight: 800; color: white; flex-shrink: 0;
+    box-shadow: 0 0 20px rgba(139,92,246,0.5);
+  }
+  .c-pname { font-size: 16px; font-weight: 800; color: white; }
+  .c-pemail { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 3px; }
+  .c-edit-pill {
+    margin-left: auto;
+    background: rgba(139,92,246,0.2);
+    border: 1px solid rgba(139,92,246,0.4);
+    border-radius: 999px; padding: 5px 12px;
+    font-size: 11px; color: #a78bfa; font-weight: 600; flex-shrink: 0;
+  }
+
+  .c-stats-row {
+    display: flex; gap: 9px; margin: 0 14px 14px;
+  }
+  .c-stat-card {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 14px 10px; text-align: center;
+  }
+  .c-stat-val {
+    font-size: 22px; font-weight: 800;
+    background: linear-gradient(90deg, #60A5FA, #A78BFA);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .c-stat-lbl { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 3px; }
+
+  .c-section-lbl {
+    font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.35);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0 16px 6px;
+  }
+  .c-card {
+    margin: 0 14px 12px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 18px;
+    overflow: hidden;
+  }
+  .c-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 14px;
+  }
+  .c-row + .c-row { border-top: 1px solid rgba(255,255,255,0.07); }
+  .c-icon-box {
+    width: 36px; height: 36px; border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  .c-row-text { flex: 1; }
+  .c-row-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); }
+  .c-row-sub { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+  .c-chevron { font-size: 13px; color: rgba(255,255,255,0.25); }
+  .c-toggle {
+    width: 42px; height: 24px; border-radius: 999px;
+    background: linear-gradient(90deg, #3D7BF4, #8B5CF6);
+    position: relative; flex-shrink: 0;
+    box-shadow: 0 0 12px rgba(139,92,246,0.45);
+  }
+  .c-toggle-knob {
+    width: 20px; height: 20px; border-radius: 50%; background: white;
+    position: absolute; top: 2px; right: 2px;
+  }
+  .c-toggle-off {
+    width: 42px; height: 24px; border-radius: 999px;
+    background: rgba(255,255,255,0.12);
+    position: relative; flex-shrink: 0;
+  }
+  .c-toggle-off .c-toggle-knob { right: auto; left: 2px; background: rgba(255,255,255,0.5); }
+  .c-logout {
+    margin: 2px 14px 14px;
+    background: rgba(255,59,48,0.1);
+    border: 1px solid rgba(255,59,48,0.3);
+    border-radius: 16px; padding: 13px;
+    text-align: center;
+    font-size: 13px; font-weight: 700; color: #FF6B6B;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+</style>
+</head>
+<body>
+
+<h1>마이페이지 디자인 미리보기</h1>
+
+<div class="row">
+
+  <!-- ═══ A타입 ═══ -->
+  <div class="phone-wrap">
+    <span class="tag tag-a">A타입</span>
+    <div class="phone-label">Gradient Hero</div>
+    <div class="phone phone-a">
+
+      <!-- 히어로 섹션 -->
+      <div class="a-hero">
+        <div class="a-hero-title">MY PAGE</div>
+        <div class="a-avatar-row">
+          <div class="a-avatar">김</div>
+          <div>
+            <div class="a-name">김민준</div>
+            <div class="a-email">minjun@gmail.com</div>
+          </div>
+          <div class="a-edit-btn">✎</div>
+        </div>
+        <div class="a-hero-curve"></div>
+      </div>
+
+      <!-- 통계 카드 (히어로 위에 겹침) -->
+      <div class="a-stats-float">
+        <div class="a-stat">
+          <div class="a-stat-val">42</div>
+          <div class="a-stat-lbl">총 일기</div>
+        </div>
+        <div class="a-stat">
+          <div class="a-stat-val">7</div>
+          <div class="a-stat-lbl">이번 달</div>
+        </div>
+        <div class="a-stat">
+          <div class="a-stat-val">🔥</div>
+          <div class="a-stat-lbl">연속 3일</div>
+        </div>
+      </div>
+
+      <div class="a-body">
+
+        <div class="a-section-lbl">앱 설정</div>
+        <div class="a-card">
+          <div class="a-row">
+            <div class="a-icon-box" style="background:#FFF3E0">🔔</div>
+            <div class="a-row-text">
+              <div class="a-row-title">알림 설정</div>
+              <div class="a-row-sub">매일 오후 9:00</div>
+            </div>
+            <div class="a-toggle"><div class="a-toggle-knob"></div></div>
+          </div>
+          <div class="a-row">
+            <div class="a-icon-box" style="background:#F3E5F5">🔐</div>
+            <div class="a-row-text">
+              <div class="a-row-title">PIN 번호 설정</div>
+              <div class="a-row-sub">일기 보호 PIN 번호</div>
+            </div>
+            <div class="a-toggle-off"><div class="a-toggle-knob"></div></div>
+          </div>
+          <div class="a-row">
+            <div class="a-icon-box" style="background:#EEF3FF">👤</div>
+            <div class="a-row-text">
+              <div class="a-row-title">프로필 정보 변경</div>
+            </div>
+            <div class="a-chevron">›</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="a-logout">🚪 로그아웃</div>
+
+    </div>
+    <div class="desc">
+      히어로 그라디언트 배경에 프로필 표시<br>
+      통계 카드를 히어로 아래에 겹쳐 배치<br>
+      설정 항목을 하나의 카드로 통합
+    </div>
+  </div>
+
+  <!-- ═══ B타입 ═══ -->
+  <div class="phone-wrap">
+    <span class="tag tag-b">B타입</span>
+    <div class="phone-label">Glass Cards (앱 통일)</div>
+    <div class="phone phone-b">
+
+      <div class="b-header">
+        <div style="font-size:18px">👤</div>
+        <div class="b-header-title">마이페이지</div>
+      </div>
+
+      <!-- 프로필 카드 -->
+      <div class="b-profile-card">
+        <div class="b-avatar">김</div>
+        <div>
+          <div class="b-pname">김민준</div>
+          <div class="b-pemail">minjun@gmail.com</div>
+        </div>
+        <div class="b-edit-pill">편집 ›</div>
+      </div>
+
+      <!-- 통계 -->
+      <div class="b-stats-row">
+        <div class="b-stat-card">
+          <div class="b-stat-icon">📓</div>
+          <div class="b-stat-val">42</div>
+          <div class="b-stat-lbl">총 일기</div>
+        </div>
+        <div class="b-stat-card">
+          <div class="b-stat-icon">📅</div>
+          <div class="b-stat-val">7</div>
+          <div class="b-stat-lbl">이번 달</div>
+        </div>
+        <div class="b-stat-card">
+          <div class="b-stat-icon">🔥</div>
+          <div class="b-stat-val">3</div>
+          <div class="b-stat-lbl">연속 일수</div>
+        </div>
+      </div>
+
+      <div class="b-section-lbl">앱 설정</div>
+      <div class="b-card">
+        <div class="b-row">
+          <div class="b-icon-box" style="background:#FFF3E0">🔔</div>
+          <div class="b-row-text">
+            <div class="b-row-title">알림 설정</div>
+            <div class="b-row-sub">매일 오후 9:00</div>
+          </div>
+          <div class="a-toggle"><div class="a-toggle-knob"></div></div>
+        </div>
+        <div class="b-row">
+          <div class="b-icon-box" style="background:#F3E5F5">🔐</div>
+          <div class="b-row-text">
+            <div class="b-row-title">PIN 번호 설정</div>
+            <div class="b-row-sub">일기 보호 PIN 번호</div>
+          </div>
+          <div class="a-toggle-off"><div class="a-toggle-knob"></div></div>
+        </div>
+      </div>
+
+      <div class="b-section-lbl">계정</div>
+      <div class="b-card">
+        <div class="b-row">
+          <div class="b-icon-box" style="background:#EEF3FF">👤</div>
+          <div class="b-row-text">
+            <div class="b-row-title">프로필 정보 변경</div>
+          </div>
+          <div style="font-size:14px;color:#c4ccd6">›</div>
+        </div>
+      </div>
+
+      <div class="b-logout">🚪 로그아웃</div>
+
+    </div>
+    <div class="desc">
+      챗봇/홈 화면과 동일한 그라디언트 배경<br>
+      반투명 글라스 카드로 통일감 부여<br>
+      통계 3개 항목 아이콘 포함 카드 배치
+    </div>
+  </div>
+
+  <!-- ═══ C타입 ═══ -->
+  <div class="phone-wrap">
+    <span class="tag tag-c">C타입</span>
+    <div class="phone-label">Dark Mode</div>
+    <div class="phone phone-c">
+
+      <div class="c-header">
+        <div>
+          <div class="c-header-title">마이페이지</div>
+          <div class="c-header-sub">설정 및 계정 관리</div>
+        </div>
+      </div>
+
+      <!-- 프로필 카드 -->
+      <div class="c-profile-card">
+        <div class="c-avatar">김</div>
+        <div>
+          <div class="c-pname">김민준</div>
+          <div class="c-pemail">minjun@gmail.com</div>
+        </div>
+        <div class="c-edit-pill">편집 ›</div>
+      </div>
+
+      <!-- 통계 -->
+      <div class="c-stats-row">
+        <div class="c-stat-card">
+          <div class="c-stat-val">42</div>
+          <div class="c-stat-lbl">총 일기</div>
+        </div>
+        <div class="c-stat-card">
+          <div class="c-stat-val">7</div>
+          <div class="c-stat-lbl">이번 달</div>
+        </div>
+        <div class="c-stat-card">
+          <div class="c-stat-val">3🔥</div>
+          <div class="c-stat-lbl">연속 일수</div>
+        </div>
+      </div>
+
+      <div class="c-section-lbl">앱 설정</div>
+      <div class="c-card">
+        <div class="c-row">
+          <div class="c-icon-box" style="background:rgba(255,152,0,0.15)">🔔</div>
+          <div class="c-row-text">
+            <div class="c-row-title">알림 설정</div>
+            <div class="c-row-sub">매일 오후 9:00</div>
+          </div>
+          <div class="c-toggle"><div class="c-toggle-knob"></div></div>
+        </div>
+        <div class="c-row">
+          <div class="c-icon-box" style="background:rgba(139,92,246,0.18)">🔐</div>
+          <div class="c-row-text">
+            <div class="c-row-title">PIN 번호 설정</div>
+            <div class="c-row-sub">일기 보호 PIN 번호</div>
+          </div>
+          <div class="c-toggle-off"><div class="c-toggle-knob"></div></div>
+        </div>
+        <div class="c-row">
+          <div class="c-icon-box" style="background:rgba(96,165,250,0.15)">👤</div>
+          <div class="c-row-text">
+            <div class="c-row-title">프로필 정보 변경</div>
+          </div>
+          <div class="c-chevron">›</div>
+        </div>
+      </div>
+
+      <div class="c-logout">🚪 로그아웃</div>
+
+    </div>
+    <div class="desc">
+      다크 그라디언트 배경<br>
+      반투명 카드 + 네온 포인트 컬러<br>
+      통계 수치에 그라디언트 텍스트 적용
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

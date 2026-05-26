@@ -5,24 +5,27 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.diaryapplication.viewmodel.ReportViewModel
 import kotlin.math.max
@@ -34,95 +37,81 @@ import java.time.temporal.TemporalAdjusters
 @Composable
 fun ReportScreen(
     padding: PaddingValues,
-    reportViewModel: ReportViewModel = viewModel() // DB와 통신하기 위한 ViewModel
+    reportViewModel: ReportViewModel = viewModel()
 ) {
-    var tab by remember { mutableStateOf(0) } // 0: 주간, 1: 월간
-    val isWeekly = tab == 0 // 현재 주간 탭이면 True
+    var tab by remember { mutableStateOf(0) }
+    val isWeekly = tab == 0
 
-    LaunchedEffect(Unit){
+    LaunchedEffect(Unit) {
         reportViewModel.loadWeeklyData()
         reportViewModel.loadMonthlyData()
     }
 
-    // 히스토그램 X축 라벨
-    // 주간 -> 요일, 월간 -> 주차
     val weeklyLabels = listOf("일", "월", "화", "수", "목", "금", "토")
     val monthlyWeekLabels = listOf("1주", "2주", "3주", "4주", "5주")
-    
-    // 주간 데이터를 실시간을 받아옴
+
     val weeklyStudy by reportViewModel.weeklyStudy.collectAsState()
     val weeklyExercise by reportViewModel.weeklyExercise.collectAsState()
-
-    // 월간 데이터를 실시간으로 받아옴
     val monthlyStudyDaily by reportViewModel.monthlyStudyDaily.collectAsState()
     val monthlyExerciseDaily by reportViewModel.monthlyExerciseDaily.collectAsState()
 
-    // (주간) 운동 및 공부 시간 합계/통계 값 계산
     val weeklyDiaryCount by reportViewModel.weeklyDiaryCount.collectAsState()
     val weeklyAvgExercise by reportViewModel.weeklyAvgExercise.collectAsState()
-    val weeklyTotalExcercise by reportViewModel.weeklyTotalExercise.collectAsState()
+    val weeklyTotalExercise by reportViewModel.weeklyTotalExercise.collectAsState()
     val weeklyTotalStudy by reportViewModel.weeklyTotalStudy.collectAsState()
 
-    // (월간) 운동 및 공부 시간 합계/통계 값 계산
     val monthlyDiaryCount by reportViewModel.monthlyDiaryCount.collectAsState()
     val monthlyAvgExercise by reportViewModel.monthlyAvgExercise.collectAsState()
     val monthlyTotalExercise by reportViewModel.monthlyTotalExercise.collectAsState()
     val monthlyTotalStudy by reportViewModel.monthlyTotalStudy.collectAsState()
 
-    // (주간/월간) 이모지
     val weeklyEmotions by reportViewModel.weeklyEmotions.collectAsState()
     val monthlyEmotions by reportViewModel.monthlyEmotions.collectAsState()
     val emotions = if (isWeekly) weeklyEmotions else monthlyEmotions
 
-    // 일기 요약
     val weeklySummaries by reportViewModel.weeklySummaries.collectAsState()
     val monthlySummaries by reportViewModel.monthlySummaries.collectAsState()
 
-    // 선택된 탭에 따라 주간 또는 월간 데이터 중 하나를 선택
     val diaryCount = if (isWeekly) weeklyDiaryCount else monthlyDiaryCount
     val avgExerciseMin = if (isWeekly) weeklyAvgExercise else monthlyAvgExercise
-    val totalExerciseMin = if (isWeekly) weeklyTotalExcercise else monthlyTotalExercise
+    val totalExerciseMin = if (isWeekly) weeklyTotalExercise else monthlyTotalExercise
     val totalStudyMin = if (isWeekly) weeklyTotalStudy else monthlyTotalStudy
     val summaries = if (isWeekly) weeklySummaries else monthlySummaries
 
-    // 월간을 주차 단위로 묶기
-    // remember -> 데이터가 변경될 때만 재계산을 위함
     val (monthlyStudyWeekly, monthlyExerciseWeekly) = remember(monthlyStudyDaily, monthlyExerciseDaily) {
         aggregateToWeeks(monthlyStudyDaily, monthlyExerciseDaily)
     }
-    
-    val periodTitle = if (isWeekly) "이번 주" else "이번 달"
-    
-    // 오늘 날짜 기준으로 자동 계산
+
+    val selectedWeekDate by reportViewModel.selectedWeekDate.collectAsState()
+    val selectedMonthDate by reportViewModel.selectedMonthDate.collectAsState()
     val today = remember { LocalDate.now() }
 
-    // 기간 범위 텍스트 계산
-    // EX> 월요일 ~ 일요일
-    // EX> 3월 3일 ~ 9일
-    val periodRange = remember(isWeekly, today) {
-        if (isWeekly) {
-            
-            // 이번 주 월요일 ~ 일요일
-            val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-            val weekEnd = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
-            
-            // 월이 같으면 "3월 3일 - 9일", 다르면 "3월 31일 - 4월 6일"
-            if (weekStart.monthValue == weekEnd.monthValue) {
-                "${weekStart.monthValue}월 ${weekStart.dayOfMonth}일 - ${weekEnd.dayOfMonth}일"
-            } else {
-                "${weekStart.monthValue}월 ${weekStart.dayOfMonth}일 - ${weekEnd.monthValue}월 ${weekEnd.dayOfMonth}일"
-            }
-        } else {
-            // 이번 달 1일 ~ 말일
-            val monthStart = today.withDayOfMonth(1)
-            val monthEnd = today.with(TemporalAdjusters.lastDayOfMonth())
-            "${monthStart.monthValue}월 ${monthStart.dayOfMonth}일 - ${monthEnd.dayOfMonth}일"
-        }
+    val isCurrentWeek = remember(selectedWeekDate) {
+        val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        val weekEnd = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))
+        !selectedWeekDate.isBefore(weekStart) && !selectedWeekDate.isAfter(weekEnd)
+    }
+    val isCurrentMonth = remember(selectedMonthDate) {
+        selectedMonthDate.year == today.year && selectedMonthDate.monthValue == today.monthValue
     }
 
-    
-    
-    // 요약 페이지 디자인 부분
+    val periodTitle = if (isWeekly) {
+        if (isCurrentWeek) "이번 주" else "${selectedWeekDate.monthValue}월"
+    } else {
+        if (isCurrentMonth) "이번 달" else "${selectedMonthDate.monthValue}월"
+    }
+
+    val todayWeeklyIndex = remember(today, selectedWeekDate) {
+        val weekStart = selectedWeekDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        val weekEnd = selectedWeekDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))
+        if (!today.isBefore(weekStart) && !today.isAfter(weekEnd)) today.dayOfWeek.value % 7 else -1
+    }
+    val todayMonthlyIndex = remember(today, selectedMonthDate) {
+        if (today.year == selectedMonthDate.year && today.monthValue == selectedMonthDate.monthValue)
+            minOf((today.dayOfMonth - 1) / 7, 4)
+        else -1
+    }
+
     Column(
         modifier = Modifier
             .padding(padding)
@@ -130,76 +119,65 @@ fun ReportScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         ReportHeader()
-        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)) // 구분선
-        androidx.compose.foundation.lazy.LazyColumn( // 스크롤을 가능하게
+        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+        LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                CheckSegmentedTabs( // 주간/월간 탭
+                CheckSegmentedTabs(
                     selectedIndex = tab,
                     onSelect = { tab = it },
                     left = "주간",
                     right = "월간"
                 )
             }
-            item { PeriodCard(title = periodTitle, range = periodRange) } // 기간을 나타내는 카드
             item {
-                EmotionSummaryCard( // 감정 요약 카드
+                PeriodNavCard(
+                    isWeekly = isWeekly,
+                    selectedDate = if (isWeekly) selectedWeekDate else selectedMonthDate,
+                    today = today,
+                    onNavigate = { delta ->
+                        if (isWeekly) reportViewModel.navigateWeek(delta)
+                        else reportViewModel.navigateMonth(delta)
+                    }
+                )
+            }
+            item {
+                EmotionSummaryCard(
                     title = "$periodTitle 나의 감정",
                     emptyText = "아직 감정 기록이 없습니다",
                     emotions = emotions
                 )
             }
-            item { // 일기 수, 평균 운동 데이터 카드
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    KpiCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Outlined.MenuBook,
-                        title = "작성한 일기",
-                        value = "${diaryCount}개"
-                    )
-                    KpiCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Outlined.SportsGymnastics,
-                        title = "평균 운동",
-                        value = "${formatMinutes(avgExerciseMin)}"
-                    )
-                }
-            }
-            item { // 총 운동 시간, 총 공부 시간 카드
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    KpiCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Outlined.SportsGymnastics,
-                        title = "총 운동시간",
-                        value = "${formatMinutes(totalExerciseMin)}"
-                    )
-                    KpiCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Outlined.School,
-                        title = "총 공부시간",
-                        value = "${formatMinutes(totalStudyMin)}"
-                    )
-                }
+            item {
+                StatsRow(
+                    diaryCount = diaryCount,
+                    avgExerciseMin = avgExerciseMin,
+                    totalExerciseMin = totalExerciseMin,
+                    totalStudyMin = totalStudyMin
+                )
             }
             item {
                 val labels = if (isWeekly) weeklyLabels else monthlyWeekLabels
                 val study = if (isWeekly) weeklyStudy else monthlyStudyWeekly
                 val exercise = if (isWeekly) weeklyExercise else monthlyExerciseWeekly
+                val todayIndex = if (isWeekly) todayWeeklyIndex else todayMonthlyIndex
                 HistogramCard(
                     title = if (isWeekly) "일별 활동" else "주간별 활동",
                     labels = labels,
                     study = study,
                     exercise = exercise,
-                    isWeekly = isWeekly
+                    isWeekly = isWeekly,
+                    todayIndex = todayIndex
                 )
             }
             item {
                 DiaryOrSummaryCard(
-                    title = if (isWeekly) "이번 주 일기" else "이번 달 일기",
-                    summaries = summaries
+                    title = "$periodTitle 일기",
+                    summaries = summaries,
+                    isWeekly = isWeekly
                 )
             }
             item { Spacer(Modifier.height(24.dp)) }
@@ -207,8 +185,6 @@ fun ReportScreen(
     }
 }
 
-// 월간을 주간 단위로 묶기 함수
-// 반환 -> 공부 주차 리스트, 운동 주차 리스트를 Pair(쌍)으로 반환
 private fun aggregateToWeeks(studyDaily: List<Int>, exerciseDaily: List<Int>): Pair<List<Int>, List<Int>> {
     fun chunkSum(list: List<Int>, start: Int, endInclusive: Int): Int {
         var s = 0
@@ -216,13 +192,7 @@ private fun aggregateToWeeks(studyDaily: List<Int>, exerciseDaily: List<Int>): P
         for (i in start..end) s += list[i]
         return s
     }
-    val ranges = listOf(
-        0 to 6, // 1주
-        7 to 13, // 2주
-        14 to 20, // 3주
-        21 to 27, // 4주
-        28 to 34 // 5주 (29~31)
-    )
+    val ranges = listOf(0 to 6, 7 to 13, 14 to 20, 21 to 27, 28 to 34)
     val study = ranges.map { (a, b) -> chunkSum(studyDaily, a, b) }
     val exercise = ranges.map { (a, b) -> chunkSum(exerciseDaily, a, b) }
     return study to exercise
@@ -233,27 +203,35 @@ private fun ReportHeader() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Icon(
-            imageVector = Icons.Outlined.BarChart,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .fillMaxHeight()
+                .background(
+                    Brush.verticalGradient(listOf(Color(0xFF3D7BF4), Color(0xFF818CF8))),
+                    RoundedCornerShape(999.dp)
+                )
         )
-        Spacer(Modifier.width(8.dp))
         Column {
-            Text("활동 요약", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(
+                "활동 요약",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
             Text(
                 "나의 기록을 확인해보세요",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
 
-// 주간, 월간 탭
 @Composable
 private fun CheckSegmentedTabs(
     selectedIndex: Int,
@@ -271,28 +249,13 @@ private fun CheckSegmentedTabs(
             .border(1.dp, outline, RoundedCornerShape(16.dp))
             .padding(5.dp)
     ) {
-        CheckSegItem(
-            text = left,
-            selected = selectedIndex == 0,
-            onClick = { onSelect(0) },
-            modifier = Modifier.weight(1f)
-        )
-        CheckSegItem(
-            text = right,
-            selected = selectedIndex == 1,
-            onClick = { onSelect(1) },
-            modifier = Modifier.weight(1f)
-        )
+        CheckSegItem(text = left, selected = selectedIndex == 0, onClick = { onSelect(0) }, modifier = Modifier.weight(1f))
+        CheckSegItem(text = right, selected = selectedIndex == 1, onClick = { onSelect(1) }, modifier = Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun CheckSegItem(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
+private fun CheckSegItem(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
@@ -313,74 +276,210 @@ private fun CheckSegItem(
         }
     }
 }
+
 @Composable
-private fun PeriodCard(title: String, range: String) {
+private fun PeriodNavCard(
+    isWeekly: Boolean,
+    selectedDate: LocalDate,
+    today: LocalDate,
+    onNavigate: (Int) -> Unit
+) {
+    val isCurrentPeriod = if (isWeekly) {
+        val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        val weekEnd = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))
+        !selectedDate.isBefore(weekStart) && !selectedDate.isAfter(weekEnd)
+    } else {
+        selectedDate.year == today.year && selectedDate.monthValue == today.monthValue
+    }
+
+    val title = if (isWeekly) {
+        val weekStart = selectedDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        "${weekStart.year}년 ${weekStart.monthValue}월"
+    } else {
+        "${selectedDate.year}년 ${selectedDate.monthValue}월"
+    }
+
+    val range = if (isWeekly) {
+        val weekStart = selectedDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        val weekEnd = selectedDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))
+        if (weekStart.monthValue == weekEnd.monthValue)
+            "${weekStart.monthValue}월 ${weekStart.dayOfMonth}일 – ${weekEnd.dayOfMonth}일"
+        else
+            "${weekStart.monthValue}월 ${weekStart.dayOfMonth}일 – ${weekEnd.monthValue}월 ${weekEnd.dayOfMonth}일"
+    } else {
+        val monthEnd = selectedDate.with(TemporalAdjusters.lastDayOfMonth())
+        "${selectedDate.monthValue}월 1일 – ${monthEnd.dayOfMonth}일"
+    }
+
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.CalendarMonth, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.width(8.dp))
-                Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Surface(
+                onClick = { onNavigate(-1) },
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.size(32.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.ChevronLeft, null, modifier = Modifier.size(20.dp))
+                }
             }
-            Text(range, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(range, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (isCurrentPeriod) {
+                    Spacer(Modifier.height(1.dp))
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    ) {
+                        Text(
+                            if (isWeekly) "이번 주" else "이번 달",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            Surface(
+                onClick = { if (!isCurrentPeriod) onNavigate(1) },
+                shape = RoundedCornerShape(10.dp),
+                color = if (!isCurrentPeriod) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f) else Color.Transparent,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Rounded.ChevronRight,
+                        null,
+                        modifier = Modifier.size(20.dp),
+                        tint = if (!isCurrentPeriod) MaterialTheme.colorScheme.onSurface
+                               else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                    )
+                }
+            }
         }
     }
 }
+
 @Composable
-private fun EmotionSummaryCard(title: String, emptyText: String, emotions:List<String>) {
+private fun EmotionSummaryCard(title: String, emptyText: String, emotions: List<String>) {
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        if (emotions.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().height(120.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(emptyText, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            val sorted = emotions.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }
+            val maxCount = sorted.first().value
+            val total = emotions.size
+            val top = sorted.first()
 
-            if(emotions.isEmpty()) {
+            Column {
+                // 그라디언트 히어로 섹션
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp),
-                    contentAlignment = Alignment.Center
+                        .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                        .background(Brush.linearGradient(listOf(Color(0xFF3D7BF4), Color(0xFF6366F1))))
+                        .padding(18.dp)
                 ) {
-                    Text(emptyText, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            else {
-
-                val emotionCounts = emotions
-                    .groupingBy {it}
-                    .eachCount()
-
-                // 감정 이모지 및 횟수를 표시
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    emotionCounts.forEach { (emoji, count) ->
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Column (
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.fillMaxSize()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(top.key, fontSize = 44.sp)
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(
+                                "가장 많이 느낀 감정",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                emojiToEmotionName(top.key),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = Color.White.copy(alpha = 0.2f)
                             ) {
-                                Text(emoji, style = MaterialTheme.typography.titleLarge)
                                 Text(
-                                    text = "${count}회",
+                                    "전체 기록의 ${top.value * 100 / total}%",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
                                 )
                             }
+                        }
+                    }
+                }
+
+                // 감정별 바 차트
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    sorted.forEach { (emoji, count) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                emoji,
+                                fontSize = 17.sp,
+                                modifier = Modifier.width(22.dp),
+                                textAlign = TextAlign.Center
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(7.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(999.dp))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(count.toFloat() / maxCount)
+                                        .background(
+                                            Brush.horizontalGradient(listOf(Color(0xFF3D7BF4), Color(0xFF93C5FD))),
+                                            RoundedCornerShape(999.dp)
+                                        )
+                                )
+                            }
+                            Text(
+                                "${count}회",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(24.dp),
+                                textAlign = TextAlign.End
+                            )
                         }
                     }
                 }
@@ -389,61 +488,79 @@ private fun EmotionSummaryCard(title: String, emptyText: String, emotions:List<S
     }
 }
 
-// 일기 개수, 운도 시간 등 표현해주는 네모칸(?) 디자인
 @Composable
-private fun KpiCard(
-    modifier: Modifier = Modifier,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    value: String
+private fun StatsRow(
+    diaryCount: Int,
+    avgExerciseMin: Int,
+    totalExerciseMin: Int,
+    totalStudyMin: Int
 ) {
-    val start = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-    val end = MaterialTheme.colorScheme.primary.copy(alpha = 0.03f)
+    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        StatMiniCard("📝", "작성한\n일기", "${diaryCount}개", Modifier.weight(1f))
+        StatMiniCard("🏃", "평균\n운동", formatMinutes(avgExerciseMin), Modifier.weight(1f))
+        StatMiniCard("💪", "총 운동\n시간", formatMinutes(totalExerciseMin), Modifier.weight(1f))
+        StatMiniCard("📚", "총 공부\n시간", formatMinutes(totalStudyMin), Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun StatMiniCard(icon: String, label: String, value: String, modifier: Modifier = Modifier) {
     Card(
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = modifier
-            .heightIn(120.dp)
-            .background(
-                brush = Brush.linearGradient(listOf(start, end)),
-                shape = RoundedCornerShape(18.dp)
-            )
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.10f),
-                RoundedCornerShape(18.dp)
-            )
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = 8.dp, vertical = 12.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                modifier = Modifier.size(40.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
-                }
-            }
-            Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(icon, fontSize = 18.sp)
+            Text(
+                value,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                lineHeight = 14.sp
+            )
         }
     }
 }
 
-// 통계 요약 히스토그램
+private fun emojiToEmotionName(emoji: String): String = when (emoji) {
+    "😊" -> "행복"
+    "😢" -> "슬픔"
+    "😡" -> "화남"
+    "😰" -> "불안"
+    "😐" -> "평온"
+    "😄" -> "기쁨"
+    "🥺" -> "속상함"
+    "😴" -> "피곤함"
+    "😎" -> "자신감"
+    "🤩" -> "설렘"
+    "😤" -> "짜증"
+    "🤗" -> "감사"
+    else -> emoji
+}
+
 @Composable
 private fun HistogramCard(
     title: String,
     labels: List<String>,
     study: List<Int>,
     exercise: List<Int>,
-    isWeekly: Boolean
+    isWeekly: Boolean,
+    todayIndex: Int
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
@@ -452,147 +569,130 @@ private fun HistogramCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LegendDot(color = Color(0xFF60A5FA), label = "운동")
+                    LegendDot(color = MaterialTheme.colorScheme.primary, label = "공부")
+                }
+            }
             HistogramWithHighlightTooltip(
                 labels = labels,
                 study = study,
                 exercise = exercise,
                 isWeekly = isWeekly,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(190.dp)
+                todayIndex = todayIndex,
+                modifier = Modifier.fillMaxWidth().height(190.dp)
             )
         }
     }
 }
 
-// 히스토그램
+@Composable
+private fun LegendDot(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(modifier = Modifier.size(8.dp).background(color, RoundedCornerShape(2.dp)))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
 @Composable
 private fun HistogramWithHighlightTooltip(
     labels: List<String>,
     study: List<Int>,
     exercise: List<Int>,
     isWeekly: Boolean,
+    todayIndex: Int,
     modifier: Modifier = Modifier
 ) {
-    // 전체 데이터 중 가장 큰 값을 계산
-    /*
-        [Example]
-        study = [30, 60, 0, 45, 90, 20, 10]
-        exercise = [20, 40, 30, 0, 60, 15, 5]
-        study + exercise = [30, 60, 0, 45, 90, 20, 10, 20, 40, 30, 0, 60, 15, 5]
-        .maxOrNull() = 90 => maxValue = 90
-
-        이 값을 이용해 막대의 높이 비율을 계싼
-        max(1,..)을 통해 0이 되는 것을 방지하기 위함
-     */
     val maxValue = max(1, (study + exercise).maxOrNull() ?: 1)
 
-    val axisColor = Color(0xFF2F343A)
-    val gridColor = Color(0xFFE7EBF0)
+    val gridColor = Color(0xFFF3F4F6)
+    val highlightColor = Color(0xFFBDBDBD).copy(alpha = 0.40f)
+    val todayBgColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
 
-    // 히스토그램의 디자인적인 요소들
-    val dash = remember { PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f) } // 점선 효과를 정의
+    val exerciseGradientTop = Color(0xFF60A5FA)
+    val exerciseGradientBottom = Color(0xFFBFDBFE)
+    val studyGradientTop = MaterialTheme.colorScheme.primary
+    val studyGradientBottom = Color(0xFF93C5FD)
 
-    val highlightColor = Color(0xFFBDBDBD).copy(alpha = 0.55f)
-    val exerciseColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-    val studyColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.60f)
-
-    var selectedIndex by remember { mutableStateOf<Int?>(null) } // 터치된 막대의 인덱스
-    var tooltipAnchor by remember { mutableStateOf(Offset.Zero) } // 툴팁이 표시될 위치의 좌표
-    var highlightRect by remember { mutableStateOf<Rect?>(null) } // 강조 표시할 사각형의 영역
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
+    var tooltipAnchor by remember { mutableStateOf(Offset.Zero) }
+    var highlightRect by remember { mutableStateOf<Rect?>(null) }
 
     Box(modifier = modifier) {
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(labels, study, exercise) { // 터치 입력 처리를 위함
-                    detectTapGestures { tap -> // 탭 터치를 감지
-
-                        // 1. Canvas의 전체 너비 및 높이를 정의
+                .pointerInput(labels, study, exercise) {
+                    detectTapGestures { tap ->
                         val w = size.width
                         val h = size.height
-
-                        // 2. 차트의 여백을 설정
                         val topPad = 10f
                         val bottomPad = 48f
-                        val leftPad = 34f
+                        val leftPad = 8f
                         val rightPad = 8f
-
-                        // 실제 차트가 그려지는 너비와 높이를 계산
-                        // EX> 전체 너비를 400px라고 하면, chartW = 400 - 34 - 8 = 358px
                         val chartW = w - leftPad - rightPad
                         val chartH = h - topPad - bottomPad
-
-                        // X축 레이블의 개수
                         val count = labels.size
-
-                        // 각 막대의 중심 X좌표 계산 함수
-                        // step -> 각 레이블 하나가 차지하는 너비
-                        // step = 차트의 전체 길이 / X축 라벨의 개수 = 차지하는 너비
-
-                        /*
-                            [Example]
-                            chartW = 350px, count=7(주간)
-                            step = 350 / 7 = 50px
-                            --> 요일 한 칸당 50px씩 차지!
-                         */
                         val step = chartW / count
-
-                        // i번째 막대의 중심 X좌표를 계산
-                        // i=0(일요일) -> center(0) = 34 + 50*0 + 25 = 59px
-                        // i=1(월요일) -> center(1) = 34 + 50*1 + 25 = 109px
                         val centerX = { i: Int -> leftPad + step * i + step / 2f }
-
-                        // 터치 위치가 어떤 막대 위에 있는지 판단
-                        val highlightW = step * 0.60f // 터치를 감지하는 사각형의 너비 (step의 60%)
-                        var hit: Int? = null // 터치된 막대의 인덱스를 저장
-
-                        for (i in 0 until count) { // 터치 감지를 위한 사각형 영역을 생성
+                        val hitW = step * 0.75f
+                        var hit: Int? = null
+                        for (i in 0 until count) {
                             val cx = centerX(i)
-                            val rect = Rect(
-                                left = cx - highlightW / 2f,
-                                top = topPad,
-                                right = cx + highlightW / 2f,
-                                bottom = topPad + chartH
-                            )
-                            if (rect.contains(tap)) { hit = i; break } // 만약 터치 위치가 사각형 안에 있으면 True
+                            val rect = Rect(cx - hitW / 2f, topPad, cx + hitW / 2f, topPad + chartH)
+                            if (rect.contains(tap)) { hit = i; break }
                         }
-
-                        // 막대를 터치하면 강조 및 툴팁을 표시
                         if (hit != null) {
-                            selectedIndex = hit // 터치된 해당 막대의 인덱스를 저장
-
-                            // 툴팁을 표시할 위치를 계산
-                            val cx = centerX(hit) // 터치한 막대의 중심 X좌표
-                            tooltipAnchor = Offset(cx, topPad + chartH * 0.35f) // Y는 차트 높이의 35% 지점
-                            highlightRect = Rect( // 강조될 사각형의 영역을 저장 -> 터치된 막대의 전체 높이만큼
-                                left = cx - highlightW / 2f,
-                                top = topPad,
-                                right = cx + highlightW / 2f,
-                                bottom = topPad + chartH
-                            )
-                        } else { // 빈 곳을 터치하면 해제
+                            selectedIndex = hit
+                            val cx = centerX(hit)
+                            tooltipAnchor = Offset(cx, topPad + chartH * 0.35f)
+                            highlightRect = Rect(cx - hitW / 2f, topPad, cx + hitW / 2f, topPad + chartH)
+                        } else {
                             selectedIndex = null
                             highlightRect = null
                         }
                     }
                 }
-        ) { // 실제 Canvas에서 그리는 로직
-
-            // Canvas 영역 설정
+        ) {
             val w = size.width
             val h = size.height
-
-            // 차트 여백 및 크기를 계산
             val topPad = 10f
             val bottomPad = 48f
-            val leftPad = 34f
+            val leftPad = 8f
             val rightPad = 8f
             val chartW = w - leftPad - rightPad
             val chartH = h - topPad - bottomPad
 
-            highlightRect?.let { r -> // 선택된 막대 위에 반투명 회색 강조 사각형을 그림
+            val gridLines = 4
+            for (i in 0..gridLines) {
+                val y = topPad + chartH * (i / gridLines.toFloat())
+                drawLine(gridColor, Offset(leftPad, y), Offset(leftPad + chartW, y), strokeWidth = 1.5f)
+            }
+
+            val count = labels.size
+            val step = chartW / count
+            val centerX = { i: Int -> leftPad + step * i + step / 2f }
+            val barW = step * 0.28f
+            val gap = step * 0.07f
+
+            if (todayIndex >= 0) {
+                val cx0 = centerX(todayIndex)
+                val bgW = step * 0.82f
+                drawRoundRect(
+                    color = todayBgColor,
+                    topLeft = Offset(cx0 - bgW / 2f, topPad),
+                    size = androidx.compose.ui.geometry.Size(bgW, chartH),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(14f, 14f)
+                )
+            }
+
+            highlightRect?.let { r ->
                 drawRect(
                     color = highlightColor,
                     topLeft = Offset(r.left, r.top),
@@ -600,84 +700,64 @@ private fun HistogramWithHighlightTooltip(
                 )
             }
 
-            // 수평 격자선을 4개의 점선으로 그리기
-            val gridLines = 4
-            for (i in 0..gridLines) {
-                val y = topPad + chartH * (i / gridLines.toFloat())
-                drawLine(
-                    color = gridColor,
-                    start = Offset(leftPad, y),
-                    end = Offset(leftPad + chartW, y),
-                    strokeWidth = 2f,
-                    pathEffect = dash
-                )
-            }
-
-            // X축, Y축 그리기
-            drawLine(axisColor, Offset(leftPad, topPad), Offset(leftPad, topPad + chartH), 2f)
-            drawLine(axisColor, Offset(leftPad, topPad + chartH), Offset(leftPad + chartW, topPad + chartH), 2f)
-
-            val count = labels.size
-            val step = chartW / count
-            val centerX = { i: Int -> leftPad + step * i + step / 2f }
-
-            // 막대 너비 및 막대 사이 간격
-            val barW = step * 0.18f
-            val gap = step * 0.10f
-
-            // 각 막대의 높이를 계산
             for (i in 0 until count) {
-
-                // 데이터가 없으면 0, 있으면 그 값을 받아옴
                 val s = study.getOrElse(i) { 0 }
                 val e = exercise.getOrElse(i) { 0 }
-
-                // sH(공부 막대), eH(운동 막대)의 높이를 0~1사이로 제한하고,
-                // *0.90f를 통해 차트 높이의 90%를 최대 높이로 설정
                 val sH = (s.toFloat() / maxValue).coerceIn(0f, 1f) * (chartH * 0.90f)
                 val eH = (e.toFloat() / maxValue).coerceIn(0f, 1f) * (chartH * 0.90f)
-
                 val cx = centerX(i)
                 val baseY = topPad + chartH
 
-                // 운동 막대(왼쪽)
                 val exLeft = cx - (barW + gap / 2f)
-                drawRoundRect(
-                    color = exerciseColor,
-                    topLeft = Offset(exLeft, baseY - eH),
-                    size = androidx.compose.ui.geometry.Size(barW, eH),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f, 10f)
-                )
+                if (eH > 1f) {
+                    drawRoundRect(
+                        brush = Brush.linearGradient(
+                            colors = listOf(exerciseGradientTop, exerciseGradientBottom),
+                            start = Offset(exLeft, baseY - eH),
+                            end = Offset(exLeft, baseY)
+                        ),
+                        topLeft = Offset(exLeft, baseY - eH),
+                        size = androidx.compose.ui.geometry.Size(barW, eH),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f, 10f)
+                    )
+                }
 
-                // 공부 막대(오른쪽)
                 val stLeft = cx + (gap / 2f)
-                drawRoundRect(
-                    color = studyColor,
-                    topLeft = Offset(stLeft, baseY - sH),
-                    size = androidx.compose.ui.geometry.Size(barW, sH),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f, 10f)
-                )
+                if (sH > 1f) {
+                    drawRoundRect(
+                        brush = Brush.linearGradient(
+                            colors = listOf(studyGradientTop, studyGradientBottom),
+                            start = Offset(stLeft, baseY - sH),
+                            end = Offset(stLeft, baseY)
+                        ),
+                        topLeft = Offset(stLeft, baseY - sH),
+                        size = androidx.compose.ui.geometry.Size(barW, sH),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f, 10f)
+                    )
+                }
             }
         }
 
-        // 히스토그램 밑에 요일/주차 레이블 표시
         Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 34.dp, end = 8.dp, bottom = 6.dp)
+                .padding(start = 8.dp, end = 8.dp, bottom = 6.dp)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            labels.forEach { t ->
+            labels.forEachIndexed { i, t ->
+                val isToday = i == todayIndex
                 Text(
                     text = t,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.width(28.dp),
                     textAlign = TextAlign.Center
                 )
             }
         }
+
         selectedIndex?.let { idx ->
             val label = labels.getOrElse(idx) { "" }
             val e = exercise.getOrElse(idx) { 0 }
@@ -693,13 +773,9 @@ private fun HistogramWithHighlightTooltip(
         }
     }
 }
+
 @Composable
-private fun TooltipCard(
-    title: String,
-    exercise: Int,
-    study: Int,
-    modifier: Modifier = Modifier
-) {
+private fun TooltipCard(title: String, exercise: Int, study: Int, modifier: Modifier = Modifier) {
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -717,12 +793,21 @@ private fun TooltipCard(
     }
 }
 
-// OpenAI로 요약한 내용 카드
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DiaryOrSummaryCard(
     title: String,
-    summaries: List<Pair<String, String>>
+    summaries: List<Pair<String, String>>,
+    isWeekly: Boolean
 ) {
+    val previewCount = 3
+    var showAll by remember { mutableStateOf(false) }
+    var showSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val hasMore = summaries.size > previewCount
+    val displayed = if (isWeekly && showAll) summaries else summaries.take(previewCount)
+
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -730,41 +815,87 @@ private fun DiaryOrSummaryCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-
-            if(summaries.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min=110.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "아직 작성된 일기가 없습니다.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                if (summaries.isNotEmpty()) {
+                    Text("${summaries.size}개", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            else {
-                summaries.forEach { (date, summary) ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        // 날짜 표시
-                        Text(
-                            text = date,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        // 요약 내용 표시
-                        Text(
-                            text = summary,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-                        )
+
+            if (summaries.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 110.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("아직 작성된 일기가 없습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                }
+            } else {
+                Column {
+                    displayed.forEachIndexed { index, (date, summary) ->
+                        val isLast = index == displayed.lastIndex && !(hasMore && !showAll)
+                        TimelineItem(date = date, summary = summary, isLast = isLast)
+                    }
+                }
+
+                if (hasMore) {
+                    Surface(
+                        onClick = { if (isWeekly) showAll = !showAll else showSheet = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.07f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isWeekly) (if (showAll) "접기" else "더 보기") else "전체 보기",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(5.dp))
+                            Text(
+                                text = if (isWeekly) (if (showAll) "▲" else "▼") else "→",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("$title 전체", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("${summaries.size}개", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(bottom = 36.dp)
+                ) {
+                    itemsIndexed(summaries) { index, (date, summary) ->
+                        TimelineItem(date = date, summary = summary, isLast = index == summaries.lastIndex)
                     }
                 }
             }
@@ -772,8 +903,70 @@ private fun DiaryOrSummaryCard(
     }
 }
 
-// 시간 표현 포맷 함수
-private fun formatMinutes (min: Int) : String {
+@Composable
+private fun TimelineItem(date: String, summary: String, isLast: Boolean) {
+    val primary = MaterialTheme.colorScheme.primary
+    val lineColor = primary.copy(alpha = 0.18f)
+    val bgColor = primary.copy(alpha = 0.05f)
+
+    Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.width(20.dp).fillMaxHeight()
+        ) {
+            Spacer(Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .size(9.dp)
+                    .background(MaterialTheme.colorScheme.surface, CircleShape)
+                    .border(2.5.dp, primary, CircleShape)
+            )
+            if (!isLast) {
+                Box(modifier = Modifier.width(2.dp).weight(1f).background(lineColor))
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .padding(start = 10.dp, bottom = if (isLast) 0.dp else 14.dp)
+                .weight(1f)
+        ) {
+            Text(
+                text = formatSummaryDate(date),
+                style = MaterialTheme.typography.labelSmall,
+                color = primary,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(4.dp))
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = bgColor,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(9.dp),
+                    lineHeight = 18.sp
+                )
+            }
+        }
+    }
+}
+
+private fun formatSummaryDate(dateStr: String): String {
+    return try {
+        val date = LocalDate.parse(dateStr)
+        val dayNames = listOf("일", "월", "화", "수", "목", "금", "토")
+        val dayName = dayNames[date.dayOfWeek.value % 7]
+        "${date.monthValue}월 ${date.dayOfMonth}일 · $dayName"
+    } catch (e: Exception) {
+        dateStr
+    }
+}
+
+private fun formatMinutes(min: Int): String {
     return if (min < 60) "${min}분"
-    else "${min/60}시간 ${"%02d".format(min % 60)}분"
+    else "${min / 60}시간 ${"%02d".format(min % 60)}분"
 }

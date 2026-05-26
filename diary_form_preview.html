@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>일기 작성 폼 디자인 비교</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Noto Sans KR', sans-serif;
+    background: #f0f2f5;
+    padding: 40px 20px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 20px;
+  }
+  h1 { font-size: 13px; font-weight: 700; color: #888; letter-spacing: 0.08em; }
+  .row { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .tag { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 10px; }
+  .tag-current { color: #8c98a8; background: #e8eaed; }
+  .tag-rec { color: #2F7CF6; background: #EEF3FF; }
+  .tag-alt { color: #8c98a8; background: #f0f2f5; }
+  .phone-label { font-size: 13px; font-weight: 700; color: #333; }
+  .desc { font-size: 11px; color: #8c98a8; text-align: center; max-width: 215px; line-height: 1.6; }
+  .phone {
+    width: 270px; background: #f5f7fa; border-radius: 28px; overflow: hidden;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.13);
+    max-height: 680px; overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .phone::-webkit-scrollbar { display: none; }
+  .phone-inner { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ── 캘린더 (공통) ── */
+  .calendar-card {
+    background: white; border-radius: 16px; padding: 14px;
+  }
+  .cal-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .cal-nav-btn { font-size: 14px; color: #374151; cursor: pointer; padding: 2px 6px; }
+  .cal-month { font-size: 14px; font-weight: 700; color: #1a1a2e; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-dow { font-size: 10px; color: #9ca3af; text-align: center; padding: 3px 0; font-weight: 600; }
+  .cal-day { font-size: 12px; color: #374151; text-align: center; padding: 5px 2px; border-radius: 8px; cursor: pointer; position: relative; }
+  .cal-day.today { background: #3D7BF4; color: white; font-weight: 700; border-radius: 10px; }
+  .cal-day.has-entry { color: #1a1a2e; }
+  .cal-day .emoji { font-size: 10px; display: block; margin-top: 1px; line-height: 1; }
+  .cal-day.empty { color: transparent; cursor: default; }
+  .cal-selected-date { font-size: 11px; color: #9ca3af; text-align: center; margin-top: 10px; }
+
+  /* ── 공통 폼 요소 ── */
+  .fake-textarea {
+    width: 100%; background: #F9FAFB; border-radius: 10px;
+    padding: 10px 12px; font-size: 12px; color: #b0bac6;
+    min-height: 54px; border: 1.5px solid #F3F4F6;
+  }
+  .photo-add {
+    margin-top: 8px; border: 1.5px dashed #CBD5E1; border-radius: 10px;
+    padding: 9px; display: flex; align-items: center; justify-content: center;
+    gap: 6px; color: #9ca3af; font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .save-btn {
+    width: 100%; padding: 14px; border-radius: 14px;
+    font-size: 14px; font-weight: 700; color: white;
+    background: linear-gradient(135deg, #3D7BF4, #6FA3FF);
+    border: none; cursor: pointer; text-align: center;
+    box-shadow: 0 4px 14px rgba(61,123,244,0.35);
+  }
+
+  /* ══ 현재 ══ */
+  .card-plain { background: white; border-radius: 14px; padding: 14px; }
+  .current-weather-row { display: flex; gap: 6px; margin-top: 6px; }
+  .cw-btn { flex:1; background:#F3F4F6; border-radius:10px; padding:8px 4px; text-align:center; font-size:10px; color:#374151; }
+  .cw-btn.sel { background:#EEF3FF; color:#3D7BF4; font-weight:700; }
+  .current-time-row { display:flex; gap:8px; margin-top:6px; }
+  .ct-box { flex:1; background:#F3F4F6; border-radius:10px; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#374151; }
+
+  /* ══ A: 아이콘 섹션 + 스텝퍼 ══ */
+  .card-a { background: white; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .divider { height: 1px; background: #F3F4F6; }
+  .sec-label { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#374151; margin-bottom:8px; }
+  .sec-icon { width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; }
+  .weather-chips { display:flex; gap:6px; }
+  .wchip { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 4px; border-radius:12px; background:#F9FAFB; border:1.5px solid transparent; cursor:pointer; }
+  .wchip.sel { background:#EEF3FF; border-color:#93C5FD; }
+  .wchip-icon { font-size:20px; }
+  .wchip-label { font-size:10px; color:#6b7280; font-weight:600; }
+  .wchip.sel .wchip-label { color:#3D7BF4; }
+  .stepper-row { display:flex; gap:8px; }
+  .stepper { flex:1; background:#F9FAFB; border-radius:12px; padding:10px 12px; }
+  .st-label { font-size:10px; color:#9ca3af; font-weight:600; margin-bottom:6px; }
+  .st-ctrl { display:flex; align-items:center; justify-content:space-between; }
+  .st-btn { width:26px; height:26px; border-radius:8px; background:white; border:1px solid #E5E7EB; display:flex; align-items:center; justify-content:center; font-size:14px; color:#3D7BF4; font-weight:700; cursor:pointer; }
+  .st-val { font-size:14px; font-weight:800; color:#1a1a2e; }
+  .ai-a { background:linear-gradient(135deg,#EEF3FF,#F5F3FF); border-radius:14px; padding:14px; }
+  .ai-head-a { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
+  .ai-icon-a { width:26px; height:26px; border-radius:8px; background:linear-gradient(135deg,#3D7BF4,#818CF8); display:flex; align-items:center; justify-content:center; font-size:13px; color:white; }
+  .ai-title-a { font-size:13px; font-weight:700; color:#1a1a2e; }
+  .ai-q { font-size:11px; color:#6b7280; margin-bottom:5px; font-weight:600; }
+  .ai-inp-a { background:white; border-radius:9px; padding:8px 10px; font-size:11px; color:#b0bac6; margin-bottom:8px; border:1px solid rgba(99,102,241,0.15); }
+
+  /* ══ B: 카드 분리 ══ */
+  .mini-card { background:white; border-radius:14px; padding:14px; }
+  .mc-title { font-size:12px; font-weight:700; color:#374151; margin-bottom:9px; display:flex; align-items:center; gap:5px; }
+  .mc-dot { width:6px; height:6px; border-radius:50%; background:#3D7BF4; }
+  .weather-row-b { display:flex; gap:6px; }
+  .wb-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 4px; border-radius:12px; background:#F9FAFB; cursor:pointer; }
+  .wb-btn.sel { background:#3D7BF4; }
+  .wb-icon { font-size:19px; }
+  .wb-label { font-size:10px; color:#6b7280; font-weight:600; }
+  .wb-btn.sel .wb-label { color:white; }
+  .time-row-b { display:flex; gap:8px; margin-top:10px; }
+  .time-card-b { flex:1; background:#F9FAFB; border-radius:12px; padding:10px 12px; display:flex; align-items:center; gap:8px; }
+  .tc-icon { width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+  .tc-label { font-size:10px; color:#9ca3af; }
+  .tc-val { font-size:14px; font-weight:800; color:#1a1a2e; }
+  .ai-b { border:1.5px solid #E0E7FF; background:white; border-radius:14px; padding:14px; }
+  .ai-head-b { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
+  .ai-badge { background:linear-gradient(135deg,#3D7BF4,#818CF8); color:white; font-size:9px; font-weight:800; padding:2px 7px; border-radius:999px; }
+  .ai-title-b { font-size:13px; font-weight:700; color:#1a1a2e; }
+  .ai-inp-b { background:#F9FAFB; border-radius:9px; padding:8px 10px; font-size:11px; color:#b0bac6; margin-bottom:8px; }
+
+  /* ══ C: 다크 AI + 미니멀 ══ */
+  .meta-card-c { background:white; border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:12px; }
+  .weather-seg { display:flex; background:#F3F4F6; border-radius:10px; padding:3px; gap:2px; }
+  .ws-btn { flex:1; padding:7px 4px; border-radius:8px; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; }
+  .ws-btn.sel { background:white; box-shadow:0 1px 4px rgba(0,0,0,0.1); }
+  .ws-icon { font-size:18px; }
+  .ws-label { font-size:9px; color:#9ca3af; font-weight:600; }
+  .ws-btn.sel .ws-label { color:#374151; }
+  .time-bars { display:flex; gap:8px; }
+  .tbar { flex:1; background:#F9FAFB; border-radius:12px; padding:10px 12px; }
+  .tb-top { display:flex; justify-content:space-between; margin-bottom:6px; }
+  .tb-label { font-size:10px; color:#9ca3af; font-weight:600; }
+  .tb-val { font-size:13px; font-weight:800; color:#3D7BF4; }
+  .tb-track { height:4px; background:#E5E7EB; border-radius:999px; overflow:hidden; }
+  .tb-fill { height:100%; background:linear-gradient(90deg,#3D7BF4,#93C5FD); border-radius:999px; }
+  .ai-c { background:linear-gradient(135deg,#1e3a5f,#2d4a8a); border-radius:16px; padding:14px; }
+  .ai-head-c { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .ai-title-c { font-size:13px; font-weight:700; color:white; }
+  .ai-sub-c { font-size:10px; color:rgba(255,255,255,0.55); margin-top:1px; }
+  .ai-q-c { font-size:11px; color:rgba(255,255,255,0.65); margin-bottom:5px; font-weight:600; }
+  .ai-inp-c { background:rgba(255,255,255,0.1); border-radius:9px; padding:8px 10px; font-size:11px; color:rgba(255,255,255,0.35); margin-bottom:8px; border:1px solid rgba(255,255,255,0.12); }
+</style>
+</head>
+<body>
+<h1>일기 작성 폼 디자인 비교 (캘린더 유지)</h1>
+
+<!-- 캘린더 HTML 공통 -->
+<template id="cal-tpl">
+  <div class="calendar-card">
+    <div class="cal-nav">
+      <span class="cal-nav-btn">‹</span>
+      <span class="cal-month">5월 2026</span>
+      <span class="cal-nav-btn">›</span>
+    </div>
+    <div class="cal-grid">
+      <div class="cal-dow">일</div><div class="cal-dow">월</div><div class="cal-dow">화</div>
+      <div class="cal-dow">수</div><div class="cal-dow">목</div><div class="cal-dow">금</div><div class="cal-dow">토</div>
+      <div class="cal-day empty"></div><div class="cal-day empty"></div><div class="cal-day empty"></div>
+      <div class="cal-day empty"></div><div class="cal-day empty"></div><div class="cal-day">1</div><div class="cal-day">2</div>
+      <div class="cal-day">3</div><div class="cal-day">4</div><div class="cal-day">5</div>
+      <div class="cal-day">6</div><div class="cal-day">7</div><div class="cal-day">8</div><div class="cal-day">9</div>
+      <div class="cal-day">10</div><div class="cal-day">11</div><div class="cal-day">12</div>
+      <div class="cal-day">13</div><div class="cal-day">14</div>
+      <div class="cal-day has-entry">15<span class="emoji">😊</span></div>
+      <div class="cal-day">16</div>
+      <div class="cal-day has-entry">17<span class="emoji">🥺</span></div>
+      <div class="cal-day has-entry">18<span class="emoji">😊</span></div>
+      <div class="cal-day">19</div><div class="cal-day">20</div><div class="cal-day">21</div>
+      <div class="cal-day">22</div><div class="cal-day">23</div>
+      <div class="cal-day">24</div><div class="cal-day">25</div>
+      <div class="cal-day today">26</div>
+      <div class="cal-day">27</div><div class="cal-day">28</div><div class="cal-day">29</div><div class="cal-day">30</div>
+      <div class="cal-day">31</div>
+    </div>
+    <div class="cal-selected-date">2026년 5월 26일 (화요일)</div>
+  </div>
+</template>
+
+<div class="row">
+
+  <!-- 현재 -->
+  <div class="phone-wrap">
+    <span class="tag tag-current">현재</span>
+    <div class="phone-label">현재 스타일</div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div id="cal0"></div>
+        <div class="card-plain" style="font-size:11px;color:#9ca3af;background:#FFFDE7;padding:10px 14px">
+          💡 날짜를 선택하면 해당 날의 일기를 작성하거나 확인할 수 있어요
+        </div>
+        <div class="card-plain">
+          <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:10px">✏️ 2026년 5월 26일 (화요일)</div>
+          <div style="font-size:11px;color:#374151;margin-bottom:5px;font-weight:600">오늘의 일기 *</div>
+          <div class="fake-textarea">오늘 하루 어떠셨나요?</div>
+          <div style="height:10px"></div>
+          <div style="font-size:11px;color:#374151;margin-bottom:5px;font-weight:600">날씨</div>
+          <div class="current-weather-row">
+            <div class="cw-btn sel"><div style="font-size:18px;margin-bottom:2px">☀️</div>맑음</div>
+            <div class="cw-btn"><div style="font-size:18px;margin-bottom:2px">☁️</div>흐림</div>
+            <div class="cw-btn"><div style="font-size:18px;margin-bottom:2px">🌧️</div>비</div>
+            <div class="cw-btn"><div style="font-size:18px;margin-bottom:2px">❄️</div>눈</div>
+          </div>
+          <div style="height:10px"></div>
+          <div style="display:flex;gap:8px">
+            <div style="flex:1;font-size:11px;color:#374151">운동시간 (시간/분)</div>
+            <div style="flex:1;font-size:11px;color:#374151">공부시간 (시간/분)</div>
+          </div>
+          <div class="current-time-row">
+            <div class="ct-box"><span>0분</span><span>🕐</span></div>
+            <div class="ct-box"><span>0분</span><span>🕐</span></div>
+          </div>
+          <div style="height:10px"></div>
+          <div style="font-size:11px;color:#374151;margin-bottom:5px;font-weight:600">하루 일과</div>
+          <div class="fake-textarea">오늘 무엇을 하셨나요?</div>
+        </div>
+        <div class="card-plain" style="background:linear-gradient(135deg,#EEF3FF,#F5F3FF)">
+          <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:10px">✦ 일기 작성 도우미</div>
+          <div style="font-size:11px;color:#6b7280;margin-bottom:4px">오늘 하루 중 가장 좋았던 일</div>
+          <div class="fake-textarea" style="min-height:40px">기억하고 싶은 순간을 적어보세요</div>
+          <div style="height:8px"></div>
+          <div style="font-size:11px;color:#6b7280;margin-bottom:4px">오늘 하루 가장 아쉬웠던 일</div>
+          <div class="fake-textarea" style="min-height:40px">아쉬운 점을 적어보세요</div>
+        </div>
+        <button class="save-btn">일기 저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- A -->
+  <div class="phone-wrap">
+    <span class="tag tag-rec">추천</span>
+    <div class="phone-label">A. 아이콘 섹션 + 스텝퍼</div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div id="cal1"></div>
+        <div class="card-a">
+          <div>
+            <div class="sec-label"><div class="sec-icon" style="background:#EEF3FF">✏️</div>오늘의 일기</div>
+            <div class="fake-textarea">오늘 하루 어떠셨나요?</div>
+            <div class="photo-add">📷 사진 추가하기</div>
+          </div>
+          <div class="divider"></div>
+          <div>
+            <div class="sec-label"><div class="sec-icon" style="background:#FEF3C7">🌤</div>오늘의 날씨</div>
+            <div class="weather-chips">
+              <div class="wchip sel"><span class="wchip-icon">☀️</span><span class="wchip-label">맑음</span></div>
+              <div class="wchip"><span class="wchip-icon">☁️</span><span class="wchip-label">흐림</span></div>
+              <div class="wchip"><span class="wchip-icon">🌧️</span><span class="wchip-label">비</span></div>
+              <div class="wchip"><span class="wchip-icon">❄️</span><span class="wchip-label">눈</span></div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div>
+            <div class="sec-label"><div class="sec-icon" style="background:#DCFCE7">⏱</div>활동 시간</div>
+            <div class="stepper-row">
+              <div class="stepper">
+                <div class="st-label">🏃 운동</div>
+                <div class="st-ctrl">
+                  <div class="st-btn">−</div>
+                  <div><span class="st-val">30</span><span style="font-size:10px;color:#9ca3af"> 분</span></div>
+                  <div class="st-btn">+</div>
+                </div>
+              </div>
+              <div class="stepper">
+                <div class="st-label">📚 공부</div>
+                <div class="st-ctrl">
+                  <div class="st-btn">−</div>
+                  <div><span class="st-val">0</span><span style="font-size:10px;color:#9ca3af"> 분</span></div>
+                  <div class="st-btn">+</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div>
+            <div class="sec-label"><div class="sec-icon" style="background:#F3E8FF">📋</div>하루 일과</div>
+            <div class="fake-textarea">오늘 무엇을 하셨나요?</div>
+          </div>
+        </div>
+        <div class="ai-a">
+          <div class="ai-head-a">
+            <div class="ai-icon-a">✦</div>
+            <div class="ai-title-a">일기 작성 도우미</div>
+          </div>
+          <div class="ai-q">오늘 가장 좋았던 순간은?</div>
+          <div class="ai-inp-a">기억하고 싶은 순간을 적어보세요</div>
+          <div class="ai-q">오늘 아쉬웠던 점은?</div>
+          <div class="ai-inp-a" style="margin-bottom:0">아쉬운 점을 적어보세요</div>
+        </div>
+        <button class="save-btn">일기 저장하기</button>
+      </div>
+    </div>
+    <div class="desc">하나의 카드 안에 구분선으로 섹션 통합.<br>시간 입력을 +/− 스텝퍼로 교체</div>
+  </div>
+
+  <!-- B -->
+  <div class="phone-wrap">
+    <span class="tag tag-rec">추천</span>
+    <div class="phone-label">B. 섹션 카드 분리</div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div id="cal2"></div>
+        <div class="mini-card">
+          <div class="mc-title"><div class="mc-dot"></div>오늘의 일기</div>
+          <div class="fake-textarea">오늘 하루 어떠셨나요?</div>
+          <div class="photo-add">📷 사진 추가하기</div>
+        </div>
+        <div class="mini-card">
+          <div class="mc-title"><div class="mc-dot" style="background:#F59E0B"></div>날씨</div>
+          <div class="weather-row-b">
+            <div class="wb-btn sel"><span class="wb-icon">☀️</span><span class="wb-label">맑음</span></div>
+            <div class="wb-btn"><span class="wb-icon">☁️</span><span class="wb-label">흐림</span></div>
+            <div class="wb-btn"><span class="wb-icon">🌧️</span><span class="wb-label">비</span></div>
+            <div class="wb-btn"><span class="wb-icon">❄️</span><span class="wb-label">눈</span></div>
+          </div>
+          <div style="height:10px"></div>
+          <div class="mc-title" style="margin-bottom:8px"><div class="mc-dot" style="background:#10B981"></div>활동 시간</div>
+          <div class="time-row-b">
+            <div class="time-card-b">
+              <div class="tc-icon" style="background:#DCFCE7">🏃</div>
+              <div><div class="tc-label">운동</div><div class="tc-val">30분</div></div>
+            </div>
+            <div class="time-card-b">
+              <div class="tc-icon" style="background:#EEF3FF">📚</div>
+              <div><div class="tc-label">공부</div><div class="tc-val">0분</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="mini-card">
+          <div class="mc-title"><div class="mc-dot" style="background:#8B5CF6"></div>하루 일과</div>
+          <div class="fake-textarea">오늘 무엇을 하셨나요?</div>
+        </div>
+        <div class="ai-b">
+          <div class="ai-head-b">
+            <div class="ai-badge">AI</div>
+            <div class="ai-title-b">일기 작성 도우미</div>
+          </div>
+          <div class="ai-q">오늘 가장 좋았던 순간은?</div>
+          <div class="ai-inp-b">기억하고 싶은 순간을 적어보세요</div>
+          <div class="ai-q">오늘 아쉬웠던 점은?</div>
+          <div class="ai-inp-b" style="margin-bottom:0">아쉬운 점을 적어보세요</div>
+        </div>
+        <button class="save-btn">일기 저장하기</button>
+      </div>
+    </div>
+    <div class="desc">날씨·시간·일과를 각각 독립 카드로 분리.<br>섹션마다 컬러 포인트 점으로 구분</div>
+  </div>
+
+  <!-- C -->
+  <div class="phone-wrap">
+    <span class="tag tag-alt">대안</span>
+    <div class="phone-label">C. 세그먼트 날씨 + 다크 AI</div>
+    <div class="phone">
+      <div class="phone-inner">
+        <div id="cal3"></div>
+        <div class="mini-card">
+          <div class="mc-title"><div class="mc-dot"></div>오늘의 일기</div>
+          <div class="fake-textarea">오늘 하루 어떠셨나요?</div>
+          <div class="photo-add">📷 사진 추가하기</div>
+        </div>
+        <div class="meta-card-c">
+          <div>
+            <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:7px">날씨</div>
+            <div class="weather-seg">
+              <div class="ws-btn sel"><span class="ws-icon">☀️</span><span class="ws-label">맑음</span></div>
+              <div class="ws-btn"><span class="ws-icon">☁️</span><span class="ws-label">흐림</span></div>
+              <div class="ws-btn"><span class="ws-icon">🌧️</span><span class="ws-label">비</span></div>
+              <div class="ws-btn"><span class="ws-icon">❄️</span><span class="ws-label">눈</span></div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:7px">활동 시간</div>
+            <div class="time-bars">
+              <div class="tbar">
+                <div class="tb-top"><span class="tb-label">🏃 운동</span><span class="tb-val">30분</span></div>
+                <div class="tb-track"><div class="tb-fill" style="width:50%"></div></div>
+              </div>
+              <div class="tbar">
+                <div class="tb-top"><span class="tb-label">📚 공부</span><span class="tb-val">0분</span></div>
+                <div class="tb-track"><div class="tb-fill" style="width:0%"></div></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:7px">하루 일과</div>
+            <div class="fake-textarea">오늘 무엇을 하셨나요?</div>
+          </div>
+        </div>
+        <div class="ai-c">
+          <div class="ai-head-c">
+            <span style="font-size:20px">✦</span>
+            <div>
+              <div class="ai-title-c">일기 작성 도우미</div>
+              <div class="ai-sub-c">AI가 기록을 도와드려요</div>
+            </div>
+          </div>
+          <div class="ai-q-c">오늘 가장 좋았던 순간은?</div>
+          <div class="ai-inp-c">기억하고 싶은 순간을 적어보세요</div>
+          <div class="ai-q-c">오늘 아쉬웠던 점은?</div>
+          <div class="ai-inp-c" style="margin-bottom:0">아쉬운 점을 적어보세요</div>
+        </div>
+        <button class="save-btn">일기 저장하기</button>
+      </div>
+    </div>
+    <div class="desc">날씨 세그먼트 컨트롤 + 시간 진행바.<br>다크 AI 카드로 프리미엄 느낌</div>
+  </div>
+
+</div>
+
+<script>
+  // 캘린더를 각 phone에 복사
+  [0,1,2,3].forEach(i => {
+    const tpl = document.getElementById('cal-tpl').content.cloneNode(true);
+    document.getElementById('cal'+i).appendChild(tpl);
+  });
+</script>
+</body>
+</html>

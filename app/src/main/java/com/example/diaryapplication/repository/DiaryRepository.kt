@@ -1,4 +1,5 @@
 package com.example.diaryapplication.repository
+import android.content.Context
 import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -118,10 +119,21 @@ class DiaryRepository {
 
     // DB에 이미지를 업로드 하는 함수
     // 반환은 다운로드 URL을 반환
-    suspend fun uploadImage(uid: String, dateStr: String, uri: Uri): String {
-        val refer = storage.reference.child("diaries/$uid/$dateStr.jpg")
-        refer.putFile(uri).await()
-        return refer.downloadUrl.await().toString()
+    suspend fun uploadImage(uid: String, dateStr: String, uri: Uri, context : Context): String {
+        return withContext(Dispatchers.IO) {
+
+            // Content URI에서 바이트 직접 읽기
+            val bytes = context.contentResolver.openInputStream(uri)
+                ?.use { it.readBytes() }
+                ?: throw Exception("이미지 읽기 실패")
+
+            // 바이트로 Firebase Storage에 직접 업로드
+            val refer = storage.reference.child("diaries/$uid/$dateStr.jpg")
+            refer.putBytes(bytes).await()
+
+            refer.downloadUrl.await().toString()
+
+        }
     }
 
 
@@ -148,7 +160,8 @@ class DiaryRepository {
                     .build()
 
                 val request = Request.Builder()
-                    .url("http://192.168.123.104:8080/analyze")
+                    //.url("http://192.168.123.104:8080/analyze")
+                    .url("http://192.168.0.2:8080/analyze")
                     .post(requestBody)
                     .build()
 

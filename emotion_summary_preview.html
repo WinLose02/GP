@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>감정 요약 디자인 비교</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Noto Sans KR', sans-serif;
+    background: #f0f2f5;
+    padding: 40px 20px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 20px;
+  }
+  h1 { font-size: 13px; font-weight: 700; color: #888; letter-spacing: 0.08em; }
+  .row { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .tag { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 10px; }
+  .tag-current { color: #8c98a8; background: #e8eaed; }
+  .tag-rec { color: #2F7CF6; background: #EEF3FF; }
+  .tag-alt { color: #8c98a8; background: #f0f2f5; }
+  .phone-label { font-size: 13px; font-weight: 700; color: #333; }
+  .phone { width: 260px; background: #f5f7fa; border-radius: 28px; overflow: hidden; box-shadow: 0 16px 40px rgba(0,0,0,0.13); padding: 14px; }
+  .card { background: white; border-radius: 16px; padding: 16px; }
+  .card-title { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 14px; }
+  .desc { font-size: 11px; color: #8c98a8; text-align: center; max-width: 210px; line-height: 1.6; }
+
+  /* ── 현재 ── */
+  .current-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .current-chip {
+    width: 52px; height: 52px; border-radius: 12px;
+    background: #F3F4F6;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1px;
+  }
+  .current-emoji { font-size: 20px; }
+  .current-count { font-size: 10px; color: #9ca3af; }
+
+  /* ── A. 감정 바 ── */
+  .bar-list { display: flex; flex-direction: column; gap: 10px; }
+  .bar-item { display: flex; align-items: center; gap: 10px; }
+  .bar-emoji { font-size: 22px; flex-shrink: 0; width: 28px; text-align: center; }
+  .bar-track { flex: 1; height: 8px; background: #F3F4F6; border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #3D7BF4, #93C5FD); }
+  .bar-count { font-size: 11px; font-weight: 700; color: #374151; min-width: 20px; text-align: right; }
+  .bar-top {
+    display: flex; align-items: center; gap: 6px;
+    background: #F0F5FF; border-radius: 12px; padding: 8px 12px; margin-bottom: 12px;
+  }
+  .bar-top-emoji { font-size: 28px; }
+  .bar-top-label { font-size: 11px; color: #6B7280; }
+  .bar-top-value { font-size: 18px; font-weight: 800; color: #1a1a2e; }
+
+  /* ── B. 컬러 그리드 ── */
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .grid-item {
+    border-radius: 14px; padding: 12px 8px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 4px;
+    position: relative;
+  }
+  .grid-emoji { font-size: 28px; }
+  .grid-count { font-size: 12px; font-weight: 800; color: #1a1a2e; }
+  .grid-label { font-size: 9px; color: #6b7280; }
+  .grid-rank {
+    position: absolute; top: 6px; right: 6px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: rgba(255,255,255,0.8);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 800; color: #374151;
+  }
+
+  /* ── C. 감정 버블 ── */
+  .bubble-wrap {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    align-items: center; justify-content: center;
+    padding: 8px 0;
+  }
+  .bubble {
+    border-radius: 999px;
+    display: flex; align-items: center; gap: 5px;
+    font-weight: 700; cursor: default;
+    transition: transform 0.15s;
+  }
+  .bubble:hover { transform: scale(1.06); }
+  .bubble-emoji { line-height: 1; }
+  .bubble-count { color: white; }
+
+  /* ── D. 랭킹 ── */
+  .rank-top {
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(135deg, #EEF3FF 0%, #F0F5FF 100%);
+    border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;
+  }
+  .rank-crown { font-size: 14px; }
+  .rank-top-emoji { font-size: 36px; }
+  .rank-top-info { flex: 1; }
+  .rank-top-label { font-size: 11px; color: #6b7280; margin-bottom: 2px; }
+  .rank-top-count { font-size: 22px; font-weight: 800; color: #1a1a2e; line-height: 1; }
+  .rank-top-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+  .rank-list { display: flex; flex-direction: column; gap: 6px; }
+  .rank-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; border-radius: 10px; background: #FAFAFA;
+  }
+  .rank-num { font-size: 11px; font-weight: 800; color: #b0bac6; width: 14px; text-align: center; }
+  .rank-emoji { font-size: 18px; }
+  .rank-bar-wrap { flex: 1; height: 5px; background: #F3F4F6; border-radius: 999px; overflow: hidden; }
+  .rank-bar { height: 100%; border-radius: 999px; }
+  .rank-count { font-size: 11px; font-weight: 700; color: #374151; min-width: 24px; text-align: right; }
+</style>
+</head>
+<body>
+
+<h1>감정 요약 디자인 비교</h1>
+
+<div class="row">
+
+  <!-- 현재 -->
+  <div class="phone-wrap">
+    <span class="tag tag-current">현재</span>
+    <div class="phone-label">현재 스타일</div>
+    <div class="phone">
+      <div class="card">
+        <div class="card-title">이번 주 나의 감정</div>
+        <div class="current-row">
+          <div class="current-chip"><span class="current-emoji">😊</span><span class="current-count">3회</span></div>
+          <div class="current-chip"><span class="current-emoji">😔</span><span class="current-count">2회</span></div>
+          <div class="current-chip"><span class="current-emoji">😤</span><span class="current-count">1회</span></div>
+          <div class="current-chip"><span class="current-emoji">😴</span><span class="current-count">1회</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A: 감정 바 -->
+  <div class="phone-wrap">
+    <span class="tag tag-rec">추천</span>
+    <div class="phone-label">A. 감정 바</div>
+    <div class="phone">
+      <div class="card">
+        <div class="card-title">이번 주 나의 감정</div>
+        <!-- 가장 많은 감정 하이라이트 -->
+        <div class="bar-top">
+          <div class="bar-top-emoji">😊</div>
+          <div style="flex:1">
+            <div class="bar-top-label">가장 많이 느낀 감정</div>
+            <div class="bar-top-value">행복 · 3회</div>
+          </div>
+          <div style="font-size: 20px">🥇</div>
+        </div>
+        <!-- 나머지 바 -->
+        <div class="bar-list">
+          <div class="bar-item">
+            <span class="bar-emoji">😊</span>
+            <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+            <span class="bar-count">3</span>
+          </div>
+          <div class="bar-item">
+            <span class="bar-emoji">😔</span>
+            <div class="bar-track"><div class="bar-fill" style="width:67%;opacity:0.75"></div></div>
+            <span class="bar-count">2</span>
+          </div>
+          <div class="bar-item">
+            <span class="bar-emoji">😤</span>
+            <div class="bar-track"><div class="bar-fill" style="width:33%;opacity:0.55"></div></div>
+            <span class="bar-count">1</span>
+          </div>
+          <div class="bar-item">
+            <span class="bar-emoji">😴</span>
+            <div class="bar-track"><div class="bar-fill" style="width:33%;opacity:0.55"></div></div>
+            <span class="bar-count">1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="desc">1위 감정 하이라이트 + 나머지는 바로 비교.<br>데이터가 직관적으로 보임</div>
+  </div>
+
+  <!-- B: 컬러 그리드 -->
+  <div class="phone-wrap">
+    <span class="tag tag-rec">추천</span>
+    <div class="phone-label">B. 컬러 그리드</div>
+    <div class="phone">
+      <div class="card">
+        <div class="card-title">이번 주 나의 감정</div>
+        <div class="grid-3">
+          <div class="grid-item" style="background:#FEF9C3">
+            <div class="grid-rank">1</div>
+            <div class="grid-emoji">😊</div>
+            <div class="grid-count">3회</div>
+            <div class="grid-label">행복</div>
+          </div>
+          <div class="grid-item" style="background:#EFF6FF">
+            <div class="grid-rank">2</div>
+            <div class="grid-emoji">😔</div>
+            <div class="grid-count">2회</div>
+            <div class="grid-label">슬픔</div>
+          </div>
+          <div class="grid-item" style="background:#FEF2F2">
+            <div class="grid-rank">3</div>
+            <div class="grid-emoji">😤</div>
+            <div class="grid-count">1회</div>
+            <div class="grid-label">짜증</div>
+          </div>
+          <div class="grid-item" style="background:#F5F3FF">
+            <div class="grid-rank">4</div>
+            <div class="grid-emoji">😴</div>
+            <div class="grid-count">1회</div>
+            <div class="grid-label">피곤</div>
+          </div>
+          <div class="grid-item" style="background:#F0FDF4">
+            <div class="grid-emoji">😌</div>
+            <div class="grid-count">1회</div>
+            <div class="grid-label">평온</div>
+          </div>
+          <div class="grid-item" style="background:#FFF7ED">
+            <div class="grid-emoji">🤩</div>
+            <div class="grid-count">1회</div>
+            <div class="grid-label">신남</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="desc">감정마다 고유 배경색 + 순위 뱃지.<br>한눈에 감정 종류와 빈도 파악 가능</div>
+  </div>
+
+  <!-- C: 감정 버블 -->
+  <div class="phone-wrap">
+    <span class="tag tag-alt">대안</span>
+    <div class="phone-label">C. 감정 버블</div>
+    <div class="phone">
+      <div class="card">
+        <div class="card-title">이번 주 나의 감정</div>
+        <div class="bubble-wrap">
+          <!-- 많을수록 크고 진하게 -->
+          <div class="bubble" style="background:#3D7BF4; padding: 10px 16px; font-size:15px;">
+            <span class="bubble-emoji" style="font-size:26px">😊</span>
+            <span class="bubble-count" style="font-size:13px">3</span>
+          </div>
+          <div class="bubble" style="background:#60A5FA; padding: 9px 14px; font-size:13px;">
+            <span class="bubble-emoji" style="font-size:22px">😔</span>
+            <span class="bubble-count" style="font-size:12px">2</span>
+          </div>
+          <div class="bubble" style="background:#93C5FD; padding: 7px 12px;">
+            <span class="bubble-emoji" style="font-size:18px">😤</span>
+            <span class="bubble-count" style="font-size:11px; color:#1e3a5f">1</span>
+          </div>
+          <div class="bubble" style="background:#BFDBFE; padding: 7px 12px;">
+            <span class="bubble-emoji" style="font-size:18px">😴</span>
+            <span class="bubble-count" style="font-size:11px; color:#1e3a5f">1</span>
+          </div>
+          <div class="bubble" style="background:#DBEAFE; padding: 7px 12px;">
+            <span class="bubble-emoji" style="font-size:18px">😌</span>
+            <span class="bubble-count" style="font-size:11px; color:#1e3a5f">1</span>
+          </div>
+        </div>
+        <div style="text-align:center; font-size:10px; color:#b0bac6; margin-top:8px">
+          크기가 클수록 자주 느낀 감정이에요
+        </div>
+      </div>
+    </div>
+    <div class="desc">빈도에 따라 버블 크기·색상 변화.<br>감정 분포를 시각적으로 표현</div>
+  </div>
+
+  <!-- D: 랭킹 -->
+  <div class="phone-wrap">
+    <span class="tag tag-alt">대안</span>
+    <div class="phone-label">D. 감정 랭킹</div>
+    <div class="phone">
+      <div class="card">
+        <div class="card-title">이번 주 나의 감정</div>
+        <!-- 1위 -->
+        <div class="rank-top">
+          <div>
+            <div class="rank-crown">👑</div>
+            <div class="rank-top-emoji">😊</div>
+          </div>
+          <div class="rank-top-info">
+            <div class="rank-top-label">이번 주 대표 감정</div>
+            <div class="rank-top-count">3회</div>
+            <div class="rank-top-sub">전체 기록의 43%</div>
+          </div>
+        </div>
+        <!-- 2위~ -->
+        <div class="rank-list">
+          <div class="rank-row">
+            <span class="rank-num">2</span>
+            <span class="rank-emoji">😔</span>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:67%;background:#60A5FA"></div></div>
+            <span class="rank-count">2회</span>
+          </div>
+          <div class="rank-row">
+            <span class="rank-num">3</span>
+            <span class="rank-emoji">😤</span>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:33%;background:#93C5FD"></div></div>
+            <span class="rank-count">1회</span>
+          </div>
+          <div class="rank-row">
+            <span class="rank-num">4</span>
+            <span class="rank-emoji">😴</span>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:33%;background:#BFDBFE"></div></div>
+            <span class="rank-count">1회</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="desc">1위 감정을 크게 강조 + 비율 표시.<br>감정 일기 앱에 가장 스토리 있는 표현</div>
+  </div>
+
+</div>
+
+</body>
+</html>

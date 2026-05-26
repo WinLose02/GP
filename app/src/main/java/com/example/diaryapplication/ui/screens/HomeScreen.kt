@@ -1,23 +1,33 @@
 package com.example.diaryapplication.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.diaryapplication.viewmodel.AuthViewModel
 import com.example.diaryapplication.viewmodel.DiaryViewModel
 import java.time.LocalDate
@@ -57,9 +67,21 @@ fun HomeScreen(
         diaryViewModel.loadMonthEmojis(today.year, today.monthValue)
     }
 
+    // 카드 진입 애니메이션 트리거
+    // false로 시작했다가 최초 컴포지션 직후 true로 바뀌면서 AnimatedVisibility가 실행됨
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
     // DiaryViewModel에서 실시간으로 정보들을 받아옴
     val writtenDates by diaryViewModel.writtenDates.collectAsState() // 일기를 작성한 날짜 목록
     val streakCount by diaryViewModel.streakCount.collectAsState() // 연속으로 작성한 일수
+    val monthStart = remember(today) { today.withDayOfMonth(1) }
+    val topEmotion = remember(emotionEmojiMap, today) {
+        emotionEmojiMap.entries
+            .filter { it.key.year == today.year && it.key.monthValue == today.monthValue }
+            .groupingBy { it.value }.eachCount()
+            .maxByOrNull { it.value }?.key ?: ""
+    }
     val streakGrid = remember(writtenDates, today) { // 스트릿 그리드를 생성
         // writtenDates와 today가 바뀔때만 계산을 함
 
@@ -107,19 +129,26 @@ fun HomeScreen(
     // takeIf -> 오늘 이후의 날짜는 제외
     // .let{} -> 해당 날짜가 있으면 이모지를 추가하되, 현재는 하드 코딩으로 임시로 대체한 상태
     val weekWeatherEmojis = remember(today, emotionEmojiMap) {
-        (0..6).mapNotNull { i ->
+        (0..6).map { i ->
             val date = weekStart.plusDays(i.toLong())
-            if (date.isAfter(today)) null
-            else emotionToWeatherEmoji(emotionEmojiMap[date])
+            when {
+                date.isAfter(today) -> ""
+                emotionEmojiMap[date] != null ->
+                    emotionToWeatherEmoji(emotionEmojiMap[date])
+                else -> ""
+
+            }
         }
+
     }
 
     // 이번주 일요일~오늘까지의 요일 라벨 목록을 생성
     val weekDayLabels = remember(today) {
         val names = listOf("일","월","화","수","목","금","토")
-        // d -> names[d.dayOfWeek.value%7] ==> names[0]="일", names[1]="월" 형태로 계산해서
-        // 요일 라벨을 만들기 위함
-        (0..6).mapNotNull { i -> weekStart.plusDays(i.toLong()).takeIf { !it.isAfter(today) }?.let { d -> names[d.dayOfWeek.value % 7] } }
+        (0..6).map { i ->
+            val date = weekStart.plusDays(i.toLong())
+            names[date.dayOfWeek.value%7]
+        }
     }
 
     // 3월 8일 ~ 14일 형태의 주간 범위 텍스트를 생성
@@ -140,26 +169,72 @@ fun HomeScreen(
             .padding(horizontal = 20.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 헤더 인사말
-        HomeGreetingHeader(
-            greeting = greeting,
-            userName = userName,
-            today = today
-        )
-        Spacer(Modifier.height(8.dp))
-        // 오늘의 질문
-        TodayQuestionCard(
-            question = todayQuestion,
-            onWriteDiary = onWriteDiary
-        )
-        // 이번달 나의 기록 (스트릿 + 마음 일기 데이터)
-        MonthlyRecordCard(
-            streakGrid = streakGrid,
-            streakCount = streakCount,
-            weekWeatherEmojis = weekWeatherEmojis,
-            weekDayLabels = weekDayLabels,
-            weekRangeLabel = weekRangeLabel
-        )
+        // 헤더 인사말 : 딜레이 없이 가장 먼저 등장
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(durationMillis = 500)) +
+                    // StiffnessLow : 스프링이 천천히 움직여 여유 있는 진입감
+                    slideInVertically(animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )) { 60 }
+        ) {
+            HomeGreetingHeader(
+                greeting = greeting,
+                userName = userName,
+                today = today
+            )
+        }
+        // 빠른 통계 카드
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 100)) +
+                    slideInVertically(animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )) { 60 }
+        ) {
+            QuickStatsRow(
+                streakCount = streakCount,
+                monthlyWriteCount = writtenDates.size,
+                topEmotion = topEmotion
+            )
+        }
+        // 오늘의 질문 카드
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 200)) +
+                    slideInVertically(animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )) { 60 }
+        ) {
+            TodayQuestionCard(
+                question = todayQuestion,
+                onWriteDiary = onWriteDiary
+            )
+        }
+        // 이번달 나의 기록 카드
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 350)) +
+                    slideInVertically(animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )) { 60 }
+        ) {
+            MonthlyRecordCard(
+                streakGrid = streakGrid,
+                monthlyWriteCount = writtenDates.size,
+                weekWeatherEmojis = weekWeatherEmojis,
+                weekDayLabels = weekDayLabels,
+                weekRangeLabel = weekRangeLabel,
+                today = today,
+                weekStart = weekStart,
+                emotionEmojiMap = emotionEmojiMap,
+                monthStart = monthStart
+            )
+        }
         Spacer(Modifier.height(8.dp))
     }
 }
@@ -198,13 +273,10 @@ private fun HomeGreetingHeader(
 @Composable
 private fun TodayQuestionCard(
     question: String,
-    onWriteDiary: () -> Unit // 일기로 답하기 버튼을 클릭 시, 일기 작성 화면으로 전환
+    onWriteDiary: () -> Unit
 ) {
-    val gradient = androidx.compose.ui.graphics.Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFF3D7BF4),
-            Color(0xFF6FA3FF)
-        )
+    val gradient = Brush.linearGradient(
+        colors = listOf(Color(0xFF3D7BF4), Color(0xFF6366F1))
     )
     Box(
         modifier = Modifier
@@ -212,15 +284,31 @@ private fun TodayQuestionCard(
             .clip(RoundedCornerShape(20.dp))
             .background(gradient)
     ) {
+        // 장식 원
+        Box(
+            modifier = Modifier
+                .size(130.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 30.dp, y = (-40).dp)
+                .background(Color.White.copy(alpha = 0.08f), CircleShape)
+        )
+        Box(
+            modifier = Modifier
+                .size(80.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 10.dp, y = 70.dp)
+                .background(Color.White.copy(alpha = 0.06f), CircleShape)
+        )
         Column(
             modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
                 text = "✦ 오늘의 질문",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.75f)
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White.copy(alpha = 0.75f),
+                letterSpacing = 0.06.sp
             )
             Text(
                 text = question,
@@ -229,40 +317,52 @@ private fun TodayQuestionCard(
                 color = Color.White,
                 lineHeight = 26.sp
             )
+            val interactionSource = remember { MutableInteractionSource() }
+            val isPressed by interactionSource.collectIsPressedAsState()
+            val scale by animateFloatAsState(
+                targetValue = if (isPressed) 0.95f else 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessHigh
+                ),
+                label = "buttonScale"
+            )
             Button(
                 onClick = onWriteDiary,
+                interactionSource = interactionSource,
                 shape = RoundedCornerShape(999.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = MaterialTheme.colorScheme.primary
+                    containerColor = Color.White.copy(alpha = 0.2f),
+                    contentColor = Color.White
                 ),
-                modifier = Modifier.height(46.dp)
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                modifier = Modifier
+                    .height(46.dp)
+                    .graphicsLayer { scaleX = scale; scaleY = scale }
             ) {
-                Icon(
-                    Icons.Outlined.Edit,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
+                Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(
-                    "일기로 답하기",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
+                Text("일기로 답하기", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
     }
 }
 // 이번 달 나의 기록
-// TODO: 추후 여기도 수정 가능성
 @Composable
 private fun MonthlyRecordCard(
-    streakGrid: List<List<Boolean?>>, // 4주 x 7일
-    streakCount: Int,
-    weekWeatherEmojis: List<String>, // 이번 주 요일별 날씨 이모지
-    weekDayLabels: List<String>, // ["월", "화", "수", "목", "금", ...]
-    weekRangeLabel: String // "3월 1일 ~ 3월 7일"
+    streakGrid: List<List<Boolean?>>,
+    monthlyWriteCount: Int,
+    weekWeatherEmojis: List<String>,
+    weekDayLabels: List<String>,
+    weekRangeLabel: String,
+    today: LocalDate,
+    weekStart: LocalDate,
+    emotionEmojiMap: Map<LocalDate, String>,
+    monthStart: LocalDate
 ) {
+    val startOffset = remember(monthStart) { monthStart.dayOfWeek.value % 7 }
+    val lastDayOfMonth = remember(monthStart) { monthStart.plusMonths(1).minusDays(1).dayOfMonth }
+
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -271,7 +371,7 @@ private fun MonthlyRecordCard(
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // 카드 헤더
             Row(
@@ -280,12 +380,14 @@ private fun MonthlyRecordCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFFFF3E0)),
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(
+                            Brush.linearGradient(listOf(Color(0xFFFF6B35), Color(0xFFFF9F1C)))
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("🔥", fontSize = 16.sp)
+                    Text("🔥", fontSize = 17.sp)
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
@@ -301,26 +403,47 @@ private fun MonthlyRecordCard(
                         .padding(horizontal = 12.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        text = "${streakCount}일 연속",
+                        text = "${monthlyWriteCount}회 작성",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
-            // 스트릿 데이터 그리드
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                streakGrid.forEach { week -> // 주(1주,2주,..)만큼 반복
+
+            // 이모지 히트맵 그리드
+            var waveVisible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { waveVisible = true }
+
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                streakGrid.forEachIndexed { weekIdx, week ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        week.forEach { recorded -> // 일(월,화,수,...) 만큼 반복
+                        week.forEachIndexed { dayIdx, recorded ->
+                            val cellIndex = weekIdx * 7 + dayIdx
+                            val dayOfMonth = weekIdx * 7 + dayIdx - startOffset + 1
+                            val cellDate = if (dayOfMonth in 1..lastDayOfMonth)
+                                monthStart.plusDays((dayOfMonth - 1).toLong()) else null
+                            val isToday = cellDate == today
+
+                            val cellAlpha by animateFloatAsState(
+                                targetValue = if (waveVisible) 1f else 0f,
+                                animationSpec = tween(durationMillis = 400, delayMillis = cellIndex * 40),
+                                label = "cellAlpha_$cellIndex"
+                            )
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(24.dp)
-                                    .clip(RoundedCornerShape(6.dp))
+                                    .height(30.dp)
+                                    .graphicsLayer { alpha = cellAlpha }
+                                    .then(
+                                        if (isToday && recorded != null)
+                                            Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(7.dp))
+                                        else Modifier
+                                    )
+                                    .clip(RoundedCornerShape(7.dp))
                                     .background(
                                         when (recorded) {
                                             true -> MaterialTheme.colorScheme.primary
@@ -333,11 +456,23 @@ private fun MonthlyRecordCard(
                     }
                 }
             }
-            // 구분선
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                thickness = 1.dp
-            )
+
+            // 범례
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.size(11.dp).clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.surfaceVariant))
+                Spacer(Modifier.width(4.dp))
+                Text("미작성", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                Spacer(Modifier.width(10.dp))
+                Box(modifier = Modifier.size(11.dp).clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.primary))
+                Spacer(Modifier.width(4.dp))
+                Text("작성", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, thickness = 1.dp)
 
             // 마음 날씨 헤더
             Row(
@@ -348,46 +483,55 @@ private fun MonthlyRecordCard(
                     text = "☁ 마음 날씨",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.SemiBold
                 )
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.weight(1f))
                 Text(
-                    text = "($weekRangeLabel)",
+                    text = weekRangeLabel,
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    fontWeight = FontWeight.Normal
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
 
-            // 요일별 마음 날씨
+            // 요일별 마음 날씨 버블
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                weekWeatherEmojis.forEachIndexed { index, emoji ->
-                    val isToday = index == weekWeatherEmojis.lastIndex // 마지막 인덱스가 '오늘'인지 여부
+                (0..6).forEach { index ->
+                    val date = weekStart.plusDays(index.toLong())
+                    val isToday = date == today
+                    val isFuture = date.isAfter(today)
+                    val emoji = weekWeatherEmojis[index]
+
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        if (isToday) { // 마지막 인덱스가 오늘이면
-                            Box(
-                                modifier = Modifier // 오늘을 강조
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFFEEF3FF))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(text = emoji, fontSize = 22.sp)
-                            }
-                        } else {
-                            Text(text = emoji, fontSize = 20.sp)
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .then(
+                                    if (isToday) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(11.dp))
+                                    else Modifier
+                                )
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(
+                                    when {
+                                        isFuture -> Color.Transparent
+                                        emoji.isNotEmpty() -> Color(0xFFEEF3FF)
+                                        else -> MaterialTheme.colorScheme.surfaceVariant
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (emoji.isNotEmpty()) Text(text = emoji, fontSize = 20.sp)
                         }
                         Text(
-                            text = weekDayLabels[index], // 요일 텍스트
-                            fontSize = 11.sp,
+                            text = weekDayLabels[index],
+                            fontSize = 10.sp,
                             color = if (isToday) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                             textAlign = TextAlign.Center
                         )
@@ -397,6 +541,66 @@ private fun MonthlyRecordCard(
         }
     }
 }
+// 통계 카드 3개(연속 작성 일수, 이번 달 작성 일수, 주요 감정)
+@Composable
+private fun QuickStatsRow(
+    streakCount: Int,
+    monthlyWriteCount: Int,
+    topEmotion: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        StatMiniCard(
+            icon = "🔥",
+            label = "연속 작성",
+            value = "${streakCount}일째",
+            modifier = Modifier.weight(1f)
+        )
+        StatMiniCard(
+            icon = "📝",
+            label = "이번 달",
+            value = "${monthlyWriteCount}회 작성",
+            modifier = Modifier.weight(1f)
+        )
+        StatMiniCard(
+            icon = if (topEmotion.isNotEmpty()) topEmotion else "😊",
+            label = "주요 감정",
+            value = emojiToEmotionLabel(topEmotion),
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun StatMiniCard(icon: String, label: String, value: String, modifier: Modifier = Modifier) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(icon, fontSize = 18.sp)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+private fun emojiToEmotionLabel(emoji: String): String = when (emoji) {
+    "😊" -> "행복"
+    "😢" -> "슬픔"
+    "😠" -> "분노"
+    "😰" -> "불안"
+    "😳" -> "당황"
+    else -> if (emoji.isNotEmpty()) emoji else "-"
+}
+
 // LocalDate에서 hour를 가져오는 확장
 // java.time.LocalTime 활용
 private val LocalDate.hour: Int get() = java.time.LocalTime.now().hour
@@ -406,9 +610,9 @@ private fun emotionToWeatherEmoji(emotionEmoji:String?) : String {
         "😊" -> "☀️"   // 기쁨  → 맑음
         "😢" -> "🌧️"  // 슬픔  → 비
         "😠" -> "⛈️"  // 분노  → 폭풍
-        "😰" -> "🌬️"  // 불안  → 바람
+        "😰" -> "🌀️"  // 불안  → 바람
         "😳" -> "🌦️"  // 당황  → 소나기
         "❎" -> "❎"   // 분석 실패 → 구름 조금
-        else -> "🌫️"  // 기록 없음 → 안개 (회색)
+        else -> ""  // 기록 없음 → 안개 (회색)
     }
 }

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>포춘쿠키 수정 미리보기</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Noto Sans KR', sans-serif;
+    background: #cdd3de;
+    padding: 40px 20px 60px;
+    display: flex; flex-direction: column; align-items: center; gap: 24px;
+  }
+  h1 { font-size: 12px; font-weight: 700; color: #888; letter-spacing: 0.1em; text-transform: uppercase; }
+  .row { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .tag { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 12px; color: #6D28D9; background: #EDE9FE; }
+  .phone-label { font-size: 13px; font-weight: 700; color: #1a1a2e; }
+  .desc { font-size: 11px; color: #6b7280; text-align: center; max-width: 230px; line-height: 1.7; }
+
+  .phone {
+    width: 295px; height: 640px;
+    border-radius: 38px;
+    overflow: hidden;
+    box-shadow: 0 24px 56px rgba(0,0,0,0.18);
+    display: flex; flex-direction: column;
+    padding: 20px 16px 16px;
+    background: linear-gradient(165deg, #EEF0FF 0%, #E8EEFF 50%, #EEF3FF 100%);
+  }
+
+  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .header-icon {
+    width: 46px; height: 46px; border-radius: 18px;
+    background: linear-gradient(135deg, #1D4ED8, #3D7BF4);
+    box-shadow: 0 6px 18px rgba(29,78,216,0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+  .header-title { font-size: 16px; font-weight: 800; color: #1a1a2e; }
+  .header-sub { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+  .chat-history { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; padding-bottom: 4px; }
+
+  .date-chip { display: flex; justify-content: center; }
+  .date-chip span {
+    background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.85);
+    border-radius: 999px; padding: 3px 12px;
+    font-size: 10px; font-weight: 600; color: #6b7280;
+  }
+
+  .bot-row { display: flex; align-items: flex-start; gap: 7px; }
+  .mini-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, #1D4ED8, #3D7BF4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; flex-shrink: 0;
+    box-shadow: 0 3px 8px rgba(29,78,216,0.3);
+  }
+  .bot-bubble {
+    background: white; border-radius: 4px 18px 18px 18px;
+    padding: 10px 13px; max-width: 200px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+    font-size: 12px; color: #1a1a2e; line-height: 1.5;
+  }
+  .bot-bubble .tm { font-size: 10px; color: #9ca3af; margin-top: 4px; }
+
+  .user-bubble {
+    background: linear-gradient(135deg, #1D4ED8, #3D7BF4);
+    border-radius: 18px 4px 18px 18px;
+    padding: 10px 13px; max-width: 175px;
+    margin-left: auto;
+    box-shadow: 0 4px 16px rgba(29,78,216,0.35);
+    font-size: 12px; color: white; line-height: 1.5;
+  }
+  .user-bubble .tm { font-size: 10px; color: rgba(255,255,255,0.65); margin-top: 4px; }
+
+  .input-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .input-field {
+    flex: 1; border-radius: 22px;
+    padding: 11px 16px; font-size: 12px; font-family: inherit;
+    background: rgba(255,255,255,0.8);
+    border: 1.5px solid rgba(255,255,255,0.95);
+    color: #9ca3af;
+  }
+  .send-btn {
+    width: 42px; height: 42px; border-radius: 50%;
+    background: linear-gradient(135deg, #1D4ED8, #3D7BF4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; color: white; flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(29,78,216,0.45);
+  }
+
+  /* 수정된 C타입: 배경 없는 쿠키 아이콘 + 별점 제거 */
+  .fortune-c {
+    border-radius: 20px;
+    background: linear-gradient(135deg, #1E1B4B, #312E81);
+    padding: 16px;
+    box-shadow: 0 8px 28px rgba(30,27,75,0.45);
+    position: relative; overflow: hidden;
+  }
+  .fortune-c::after {
+    content: '';
+    position: absolute;
+    top: -30px; right: -30px;
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    background: rgba(139,92,246,0.2);
+  }
+  .fortune-c-top {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  }
+  .fortune-c-icon {
+    font-size: 22px; flex-shrink: 0;
+  }
+  .fortune-c-title { font-size: 12px; font-weight: 800; color: white; }
+  .fortune-c-sub { font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 1px; }
+  .fortune-c-divider {
+    height: 1px; background: rgba(255,255,255,0.1); margin-bottom: 12px;
+  }
+  .fortune-c-text {
+    font-size: 13px; color: rgba(255,255,255,0.9);
+    line-height: 1.7; font-weight: 500;
+    position: relative; z-index: 1;
+  }
+  .fortune-c-footer {
+    display: flex; justify-content: flex-end;
+    margin-top: 12px; position: relative; z-index: 1;
+  }
+  .fortune-c-time { font-size: 10px; color: rgba(255,255,255,0.4); }
+</style>
+</head>
+<body>
+
+<h1>포춘쿠키 수정 미리보기 — C타입 (쿠키 배경 제거 + 별점 삭제)</h1>
+
+<div class="row">
+  <div class="phone-wrap">
+    <span class="tag">수정 C타입</span>
+    <div class="phone-label">프리미엄 다크 (수정)</div>
+    <div class="phone">
+      <div class="header">
+        <div class="header-icon">✨</div>
+        <div>
+          <div class="header-title">감정 챗봇</div>
+          <div class="header-sub">당신의 이야기를 들려주세요</div>
+        </div>
+      </div>
+      <div class="chat-history">
+        <div class="date-chip"><span>오늘 · 5월 26일</span></div>
+        <div class="bot-row">
+          <div class="mini-avatar">✨</div>
+          <div class="bot-bubble">오늘 상담을 마치겠습니다. 힘든 일을 나눠주셔서 감사해요 😊<div class="tm">15:42</div></div>
+        </div>
+        <div class="user-bubble">감사해요, 많이 도움이 됐어요<div class="tm">15:43</div></div>
+
+        <div class="fortune-c">
+          <div class="fortune-c-top">
+            <div class="fortune-c-icon">🍪</div>
+            <div>
+              <div class="fortune-c-title">오늘의 포춘쿠키</div>
+              <div class="fortune-c-sub">당신을 위한 오늘의 한 마디</div>
+            </div>
+          </div>
+          <div class="fortune-c-divider"></div>
+          <div class="fortune-c-text">
+            작은 한 걸음이 큰 변화의 시작입니다. 오늘 용기를 낸 당신을 응원해요.
+          </div>
+          <div class="fortune-c-footer">
+            <div class="fortune-c-time">15:43</div>
+          </div>
+        </div>
+      </div>
+      <div class="input-row">
+        <div class="input-field">메시지를 입력하세요...</div>
+        <div class="send-btn">➤</div>
+      </div>
+    </div>
+    <div class="desc">
+      다크 인디고 카드<br>
+      🍪 이모지 배경 박스 없이 그대로 표시<br>
+      별점 제거 — 텍스트와 시간만 표시
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

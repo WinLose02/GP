@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>챗봇 아이콘 미리보기 2</title>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Noto Sans KR', sans-serif;
+    background: #f0f2f5;
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  h2 {
+    font-size: 13px; font-weight: 700; color: #888;
+    letter-spacing: 0.08em; text-align: center;
+  }
+  .row {
+    display: flex; gap: 20px;
+    justify-content: center; flex-wrap: wrap;
+  }
+  .phone-wrap {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 8px;
+  }
+  .tag {
+    font-size: 11px; font-weight: 700;
+    border-radius: 999px; padding: 3px 10px;
+  }
+  .tag-recommend { color: #2F7CF6; background: #EEF3FF; }
+  .tag-alt { color: #8c98a8; background: #f0f2f5; }
+  .phone-label { font-size: 13px; font-weight: 700; color: #333; }
+  .phone {
+    width: 260px; background: #f5f7fa;
+    border-radius: 28px; overflow: hidden;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.13);
+    padding-bottom: 16px;
+  }
+  .chat-header {
+    margin: 14px 12px 0; background: white;
+    border-radius: 16px; padding: 12px 14px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .icon-circle {
+    width: 42px; height: 42px; border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; color: white;
+  }
+  .blue { background: #2F7CF6; }
+  .purple { background: linear-gradient(135deg, #7C3AED, #A855F7); }
+  .pink { background: linear-gradient(135deg, #EC4899, #F472B6); }
+  .teal { background: linear-gradient(135deg, #0EA5E9, #06B6D4); }
+  .chat-header-text .title {
+    font-size: 14px; font-weight: 700; color: #1a1a2e;
+  }
+  .chat-header-text .subtitle {
+    font-size: 11px; color: #8c98a8; margin-top: 2px;
+  }
+  .messages { padding: 12px 12px 0; }
+  .bubble-bot {
+    background: white; border-radius: 4px 16px 16px 16px;
+    padding: 10px 12px; max-width: 82%;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  }
+  .bubble-bot .text { font-size: 12px; color: #1a1a2e; line-height: 1.6; }
+  .bubble-bot .time { font-size: 10px; color: #b0bac6; margin-top: 4px; }
+  .desc {
+    font-size: 11px; color: #8c98a8;
+    text-align: center; max-width: 200px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<h2>새로운 챗봇 아이콘 후보</h2>
+
+<div class="row">
+
+  <!-- sparkles -->
+  <div class="phone-wrap">
+    <span class="tag tag-recommend">추천</span>
+    <div class="phone-label">Sparkles ✦</div>
+    <div class="phone">
+      <div class="chat-header">
+        <div class="icon-circle blue">
+          <i data-lucide="sparkles" width="20" height="20"></i>
+        </div>
+        <div class="chat-header-text">
+          <div class="title">감정 챗봇</div>
+          <div class="subtitle">당신의 이야기를 들려주세요</div>
+        </div>
+      </div>
+      <div class="messages">
+        <div class="bubble-bot">
+          <div class="text">안녕하세요, GP님! 😊<br>오늘 하루는 어떠셨나요?</div>
+          <div class="time">22:38</div>
+        </div>
+      </div>
+    </div>
+    <div class="desc">AI 앱의 표준 아이콘.<br>Gemini · Notion AI 등에서 사용</div>
+  </div>
+
+  <!-- message-heart -->
+  <div class="phone-wrap">
+    <span class="tag tag-recommend">추천</span>
+    <div class="phone-label">Message Heart 💬❤️</div>
+    <div class="phone">
+      <div class="chat-header">
+        <div class="icon-circle pink">
+          <i data-lucide="message-heart" width="20" height="20"></i>
+        </div>
+        <div class="chat-header-text">
+          <div class="title">감정 챗봇</div>
+          <div class="subtitle">당신의 이야기를 들려주세요</div>
+        </div>
+      </div>
+      <div class="messages">
+        <div class="bubble-bot">
+          <div class="text">안녕하세요, GP님! 😊<br>오늘 하루는 어떠셨나요?</div>
+          <div class="time">22:38</div>
+        </div>
+      </div>
+    </div>
+    <div class="desc">채팅 + 감정을 동시에 표현.<br>감정 다이어리에 가장 직관적</div>
+  </div>
+
+  <!-- wand-2 -->
+  <div class="phone-wrap">
+    <span class="tag tag-alt">대안</span>
+    <div class="phone-label">Wand ✨</div>
+    <div class="phone">
+      <div class="chat-header">
+        <div class="icon-circle purple">
+          <i data-lucide="wand-2" width="20" height="20"></i>
+        </div>
+        <div class="chat-header-text">
+          <div class="title">감정 챗봇</div>
+          <div class="subtitle">당신의 이야기를 들려주세요</div>
+        </div>
+      </div>
+      <div class="messages">
+        <div class="bubble-bot">
+          <div class="text">안녕하세요, GP님! 😊<br>오늘 하루는 어떠셨나요?</div>
+          <div class="time">22:38</div>
+        </div>
+      </div>
+    </div>
+    <div class="desc">마법처럼 도와준다는 느낌.<br>AI 기능에 자주 사용</div>
+  </div>
+
+  <!-- heart-handshake -->
+  <div class="phone-wrap">
+    <span class="tag tag-alt">대안</span>
+    <div class="phone-label">Heart Handshake 🤝</div>
+    <div class="phone">
+      <div class="chat-header">
+        <div class="icon-circle teal">
+          <i data-lucide="heart-handshake" width="20" height="20"></i>
+        </div>
+        <div class="chat-header-text">
+          <div class="title">감정 챗봇</div>
+          <div class="subtitle">당신의 이야기를 들려주세요</div>
+        </div>
+      </div>
+      <div class="messages">
+        <div class="bubble-bot">
+          <div class="text">안녕하세요, GP님! 😊<br>오늘 하루는 어떠셨나요?</div>
+          <div class="time">22:38</div>
+        </div>
+      </div>
+    </div>
+    <div class="desc">공감과 연결을 표현.<br>감정 지원 앱에 어울리는 느낌</div>
+  </div>
+
+</div>
+
+<script>
+  lucide.createIcons();
+</script>
+</body>
+</html>

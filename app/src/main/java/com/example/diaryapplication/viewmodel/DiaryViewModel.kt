@@ -10,6 +10,7 @@ import com.example.diaryapplication.repository.ChatRepository
 import com.google.firebase.Timestamp
 import java.io.File
 import com.example.diaryapplication.model.DiaryEntry
+import kotlinx.coroutines.async
 
 class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel을 생성
 
@@ -46,12 +47,8 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
         viewModelScope.launch { // 비동기로 처리
             try {
                 emotionEmojiMap.value = diaryrepository.getMonthEmojis(uid, year, month) // 완성된 Map을 저장
-                //val result = diaryrepository.getMonthEmojis(uid, year, month)
-                //android.util.Log.d("DiaryVM", "이모지 로드 결과: $result")
-                //emotionEmojiMap.value = result
             } catch (e: Exception) {
                 // 이모지 로드 실패 시 무시
-                android.util.Log.e("DiaryVM", "이모지 로드 실패 : ${e.message}")
             }
         }
     }
@@ -86,6 +83,7 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
         regretThing : String,
         imageUri : Uri?,
         videoFile : File?,
+        context: android.content.Context,
         onSuccess : () -> Unit
     ) {
         val uid = diaryrepository.currentUid ?: return
@@ -97,8 +95,14 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
             try {
                 val dateStr = date.toString()
 
+
                 val imageUrl = if (imageUri != null) {
-                    diaryrepository.uploadImage(uid, dateStr, imageUri)
+                    try {
+                        diaryrepository.uploadImage(uid, dateStr, imageUri, context)
+                    } catch(e:Exception) {
+                        android.util.Log.e("DiaryVM", "이미지 업로드 실패: ${e.message}")
+                        currentDiary.value?.imageUrl ?: ""
+                    }
                 } else {
                     currentDiary.value?.imageUrl?:""
                 }
@@ -141,24 +145,8 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
                 onSuccess()
 
                 viewModelScope.launch {
-                    // 챗봇 서버 호출 -> Summary, Keyword 데이터를 DB에 저장
-                    try {
-                        val chatResponse = chatRepository.sendToChatServer(
-                            text = content,
-                            uid = uid,
-                            date = dateStr
-                        )
 
-                        diaryrepository.saveSummary(
-                            diaryId = diaryId,
-                            summary = chatResponse.summary,
-                            keywords = chatResponse.keywords
-                        )
-                    } catch (e: Exception) {
-                        // 실패해도 무시 -> 앱 동작 계속 되어야 함
-                    }
-
-
+                    /*
                     // 영상 파일이 있으면 서버로 전송
                     if (videoFile != null) {
                         val emotion = diaryrepository.sendVideoToServer(
@@ -179,6 +167,59 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
                             }
                         }
                     }
+                     */
+
+                    // 두 서버를 동시에 호출
+                    val videoDeferred = async {
+                        if(videoFile != null) {
+                            try {
+                                diaryrepository.sendVideoToServer(
+                                    videoFile= videoFile,
+                                    diaryText = content,
+                                    uid = uid,
+                                    diaryDate = dateStr
+                                )
+                            } catch(e : Exception) { null }
+                        } else null
+                    }
+
+                    val chatDeferred = async {
+                        try{
+                            chatRepository.sendToChatServer(
+                                text = content,
+                                uid = uid,
+                                date = dateStr
+                            )
+                        } catch (e: Exception) { null }
+                    }
+
+                    // 두 결과를 동시에 기다림
+                    val emotion = videoDeferred.await()
+                    val chatResponse = chatDeferred.await()
+
+                    // 영상 분석 결과를 처리
+                    emotion?.let {
+                        val diary = diaryrepository.getDiary(uid, dateStr)
+                        diary?.let { d->
+                            val emotionEmoji = getEmotionEmoji(it)
+                            if(emotionEmoji.isNotEmpty()) {
+                                diaryrepository.updateEmotionEmoji(d.id, emotionEmoji)
+                                loadMonthEmojis(date.year, date.monthValue)
+                            }
+                        }
+                    }
+
+                    // 챗봇 결과를 처리
+                    chatResponse?.let {
+                        try {
+                            diaryrepository.saveSummary(
+                                diaryId = diaryId,
+                                summary = it.summary,
+                                keywords = it.keywords
+                            )
+                        } catch(e: Exception) { }
+                    }
+
                 }
             } catch (e: Exception) {
                 errorMessage.value = "저장에 실패했습니다: ${e.message}"
@@ -226,35 +267,4 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
         }
     }
 
-    /*
-    fun loadEmotionAndUpdate(date: LocalDate) {
-        val uid = diaryrepository.currentUid?: return
-
-        viewModelScope.launch{
-
-            try {
-                // 1. 해당 날짜의 일기 문서 ID를 가져옴
-                val diary = diaryrepository.getDiary(uid, date.toString()) ?: return@launch
-                val diaryId = diary.id
-
-                // 2. 서버에서 저장한 final_emotion 읽기
-                val finalEmotion = diaryrepository.getEmotionResult(diaryId) ?: return@launch
-
-                // 3. 감정을 앱에 표시할 이모지로 변환
-                val emotionEmoji = getEmotionEmoji(finalEmotion)
-
-                // 4. diary 컬렉션에 emotion_emoji 업데이트
-                if (emotionEmoji.isNotEmpty()) {
-                    diaryrepository.updateEmotionEmoji(diaryId, emotionEmoji)
-                }
-
-                // 5. 캘린더에 이모지를 업데이트
-                loadMonthEmojis(date.year, date.monthValue)
-
-            } catch(e: Exception) {
-                // 분석 결과가 없어도 앱은 실행해야 하므로 무시
-            }
-        }
-    }
-    */
 }

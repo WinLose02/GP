@@ -5,6 +5,7 @@ import android.widget.NumberPicker
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,7 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -46,17 +47,17 @@ import androidx.camera.core.Preview
 import androidx.camera.video.*
 import java.io.File
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import android.view.ContextThemeWrapper
 
 // 날씨 타입
 private enum class WeatherType(val label: String, val icon: @Composable () -> Unit) {
-    SUNNY("맑음", { Icon(Icons.Outlined.LightMode, contentDescription = null) }),
-    CLOUDY("흐림", { Icon(Icons.Outlined.CloudQueue, contentDescription = null) }),
-    RAIN("비", { Icon(Icons.Outlined.WaterDrop, contentDescription = null) }),
-    SNOW("눈", { Icon(Icons.Outlined.AcUnit, contentDescription = null) }),
+    SUNNY("맑음", { Icon(Icons.Rounded.LightMode, contentDescription = null) }),
+    CLOUDY("흐림", { Icon(Icons.Rounded.CloudQueue, contentDescription = null) }),
+    RAIN("비", { Icon(Icons.Rounded.WaterDrop, contentDescription = null) }),
+    SNOW("눈", { Icon(Icons.Rounded.AcUnit, contentDescription = null) }),
 }
 
 @Composable
@@ -127,9 +128,6 @@ fun DiaryScreen(
     var videoCapture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
     val scope = rememberCoroutineScope()
 
-    var latestVideoFile by remember { mutableStateOf<File?>(null) }
-
-
 
     // 현재 녹화 객체를 저장 (저장 버튼 클릭 시, 종료하기 위함)
     var activeRecording by remember { mutableStateOf<Recording?>(null) }
@@ -172,6 +170,7 @@ fun DiaryScreen(
                                 regretThing = regretThing,
                                 imageUri = selectedImageUri,
                                 videoFile = if(!event.hasError()) tempFile else null,
+                                context = context,
                                 onSuccess = {}
                             )
                         }
@@ -191,7 +190,7 @@ fun DiaryScreen(
     }
     LaunchedEffect(selectedDate) { // selectedDate가 바뀔때마다 해당 날짜의 일기를 불러옴
         diaryViewModel.loadDiary(selectedDate)
-
+        selectedImageUri = null
         // 날짜 변경 시에 진행 중인 녹화는 중지해야 함
         activeRecording?.stop()
         activeRecording = null
@@ -226,7 +225,7 @@ fun DiaryScreen(
             exerciseMin = 0
             studyMin = 0
             weather = WeatherType.SUNNY
-            selectedImageUri = null
+            //selectedImageUri = null
         }
     }
 
@@ -311,12 +310,36 @@ fun DiaryScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 페이지 타이틀
-            Text(
-                text = "📔 일기",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .padding(vertical = 4.dp)
+                    .height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .fillMaxHeight()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xFF3D7BF4), Color(0xFF818CF8))
+                            ),
+                            RoundedCornerShape(999.dp)
+                        )
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "일기",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "오늘 하루를 기록해보세요",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             // 날짜 선택
             RoundedCard(modifier = Modifier.fillMaxWidth()) {
@@ -346,29 +369,10 @@ fun DiaryScreen(
             // 안내 배너
             InfoBanner(text = "💡 날짜를 선택하면 해당 날의 일기를 작성하거나 확인할 수 있어요")
 
-            // 입력 폼
+            // Card 1: 오늘의 일기
             RoundedCard(modifier = Modifier.fillMaxWidth()) {
-
-                // 선택된 날짜 표시
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Outlined.Edit,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = formatKoreanDate(selectedDate),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(Modifier.height(14.dp))
-
-                // 일기 텍스트
-                Text("오늘의 일기 *", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(8.dp))
+                SectionDotTitle("오늘의 일기", Color(0xFF3D7BF4))
+                Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = diaryText,
                     onValueChange = { diaryText = it },
@@ -384,14 +388,16 @@ fun DiaryScreen(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
-
-                // 사진 추가
                 Spacer(Modifier.height(14.dp))
-                Text("사진", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "사진",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(Modifier.height(8.dp))
-                if (selectedImageUri != null) { // 사진이 선택 되었다면
-                    AsyncImage( // 미리 보기로 표시
-                        model = selectedImageUri, // 사진
+                if (selectedImageUri != null) {
+                    AsyncImage(
+                        model = selectedImageUri,
                         contentDescription = "선택한 사진",
                         modifier = Modifier
                             .fillMaxWidth()
@@ -411,53 +417,66 @@ fun DiaryScreen(
                         .fillMaxWidth()
                         .height(54.dp)
                 ) {
-                    Icon(Icons.Outlined.CameraAlt, contentDescription = null)
+                    Icon(Icons.Rounded.CameraAlt, contentDescription = null)
                     Spacer(Modifier.width(10.dp))
-
-                    // 사진이 선택이 되면 다시 선택하기, 아니면 사진 추가하기
                     Text(if (selectedImageUri == null) "사진 추가하기" else "사진 다시 선택하기")
                 }
             }
 
-            // 날씨, 운동 및 공부 시간 컨트롤, 일과 필드
+            // Card 2: 날씨 & 활동 시간
             RoundedCard(modifier = Modifier.fillMaxWidth()) {
-                Text("날씨", style = MaterialTheme.typography.titleSmall)
+                SectionDotTitle("날씨", Color(0xFFF59E0B))
                 Spacer(Modifier.height(10.dp))
-
-                // 날씨 선택 버튼 및 선택된 날씨로 변수에 저장
                 WeatherRow(selected = weather, onSelect = { weather = it })
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(18.dp))
+                SectionDotTitle("활동 시간", Color(0xFF10B981))
+                Spacer(Modifier.height(10.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    DurationPickerField(
+                    ActivityTimeField(
+                        icon = {
+                            Icon(
+                                Icons.Rounded.FitnessCenter,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = Color(0xFF10B981)
+                            )
+                        },
+                        label = "운동시간",
                         title = "운동시간",
                         totalMinutes = exerciseMin,
-                        onPick = { exerciseMin = it }, // 선택 완료 시, 값 업데이트
-                        modifier = Modifier.weight(1f), // ROW의 절반을 차지
-                        minMinutes = 0, // 최소: 0분
-                        maxMinutes = 1440, // 최대: 1440분(24시간)
-                        minuteStep = 10 // 10분 단위로 컨트롤
+                        onPick = { exerciseMin = it },
+                        modifier = Modifier.weight(1f)
                     )
-                    DurationPickerField(
+                    ActivityTimeField(
+                        icon = {
+                            Icon(
+                                Icons.Rounded.School,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = Color(0xFF3D7BF4)
+                            )
+                        },
+                        label = "공부시간",
                         title = "공부시간",
                         totalMinutes = studyMin,
-                        onPick = { studyMin = it }, // 선택 완료 시, 값 업데이트
-                        modifier = Modifier.weight(1f), // ROW의 절반을 차지
-                        minMinutes = 0, // 최소 : 0분
-                        maxMinutes = 1440, // 최대 : 1440분(24시간)
-                        minuteStep = 10 // 10분 단위로 컨트롤
+                        onPick = { studyMin = it },
+                        modifier = Modifier.weight(1f)
                     )
                 }
-                Spacer(Modifier.height(14.dp))
-                Text("하루 일과", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(8.dp))
+            }
+
+            // Card 3: 하루 일과
+            RoundedCard(modifier = Modifier.fillMaxWidth()) {
+                SectionDotTitle("하루 일과", Color(0xFF8B5CF6))
+                Spacer(Modifier.height(10.dp))
                 SoftOutlinedTextField(
-                    value = routineText, // 입력된 일과 텍스트
-                    onValueChange = { routineText = it }, // 입력 시, 데이터 업데이트
-                    placeholder = "오늘 무엇을 하셨나요?", // 힌트 메시지
-                    containerColor = AppFieldColor // 배경 색 - 연한 회색
+                    value = routineText,
+                    onValueChange = { routineText = it },
+                    placeholder = "오늘 무엇을 하셨나요?",
+                    containerColor = AppFieldColor
                 )
             }
 
@@ -490,6 +509,7 @@ fun DiaryScreen(
                             regretThing = regretThing,
                             imageUri = selectedImageUri,
                             videoFile = recordedFile,
+                            context = context,
                             onSuccess = {}
                         )
                     }
@@ -529,9 +549,9 @@ private fun CalendarHeader(yearMonth: YearMonth, onPrev: () -> Unit, onNext: () 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        IconButton(onClick = onPrev) { Icon(Icons.Outlined.ChevronLeft, contentDescription = null) }
+        IconButton(onClick = onPrev) { Icon(Icons.Rounded.ChevronLeft, contentDescription = null) }
         Text("${yearMonth.monthValue}월 ${yearMonth.year}", style = MaterialTheme.typography.titleSmall)
-        IconButton(onClick = onNext) { Icon(Icons.Outlined.ChevronRight, contentDescription = null) }
+        IconButton(onClick = onNext) { Icon(Icons.Rounded.ChevronRight, contentDescription = null) }
     }
 }
 
@@ -623,7 +643,7 @@ private fun WeatherRow(selected: WeatherType, onSelect: (WeatherType) -> Unit) {
             val isActive = item == selected
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else AppFieldColor,
+                color = if (isActive) MaterialTheme.colorScheme.primary else AppFieldColor,
                 modifier = Modifier
                     .weight(1f)
                     .height(64.dp)
@@ -634,12 +654,17 @@ private fun WeatherRow(selected: WeatherType, onSelect: (WeatherType) -> Unit) {
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    item.icon()
+                    CompositionLocalProvider(
+                        LocalContentColor provides if (isActive) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    ) {
+                        item.icon()
+                    }
                     Spacer(Modifier.height(6.dp))
                     Text(
                         item.label,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (isActive) MaterialTheme.colorScheme.primary
+                        color = if (isActive) MaterialTheme.colorScheme.onPrimary
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -654,36 +679,53 @@ private fun HelperCard(
     bestThing: String, onBestChange: (String) -> Unit,
     regretThing: String, onRegretChange: (String) -> Unit
 ) {
-    val gradient = Brush.verticalGradient(
-        listOf(
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.02f)
-        )
-    )
     Surface(
         shape = RoundedCornerShape(18.dp),
-        color = Color.Transparent,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.04f),
+        border = BorderStroke(1.5.dp, Color(0xFFE0E7FF)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier
-                .background(gradient, RoundedCornerShape(18.dp))
-                .padding(16.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(8.dp))
-                Text("일기 작성 도우미", style = MaterialTheme.typography.titleSmall)
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                ) {
+                    Icon(
+                        Icons.Rounded.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(6.dp)
+                            .size(18.dp)
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "일기 작성 도우미",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
-            Text("오늘 하루 중 가장 좋았던 일", style = MaterialTheme.typography.labelMedium)
+            Text(
+                "오늘 하루 중 가장 좋았던 일",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             SoftOutlinedTextField(
                 value = bestThing,
                 onValueChange = onBestChange,
                 placeholder = "기억하고 싶은 순간을 적어보세요",
                 containerColor = AppFieldColor
             )
-            Text("오늘 하루 가장 아쉬웠던 일", style = MaterialTheme.typography.labelMedium)
+            Text(
+                "오늘 하루 가장 아쉬웠던 일",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             SoftOutlinedTextField(
                 value = regretThing,
                 onValueChange = onRegretChange,
@@ -718,7 +760,7 @@ private fun DurationPickerField(
                 enabled = false, // 타이핑 방지를 위해 비활성화
                 readOnly = true,
                 singleLine = true, // 한 줄로만 표시
-                trailingIcon = { Icon(Icons.Outlined.Schedule, contentDescription = null) }, // 시계 아이콘 표시
+                trailingIcon = { Icon(Icons.Rounded.Schedule, contentDescription = null) }, // 시계 아이콘 표시
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors( // 색상 관련 파라미터
                     disabledContainerColor = AppFieldColor,
@@ -884,6 +926,78 @@ private fun HourMinutePickerSheet(
     }
 }
 
+// 섹션 헤더 (컬러 점 + 제목)
+@Composable
+private fun SectionDotTitle(text: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(color, CircleShape)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+// 활동 시간 박스 (클릭 시 BottomSheet 열림)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ActivityTimeField(
+    icon: @Composable () -> Unit,
+    label: String,
+    title: String,
+    totalMinutes: Int,
+    onPick: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var open by remember { mutableStateOf(false) }
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = AppFieldColor,
+        modifier = modifier
+            .height(72.dp)
+            .clickable { open = true }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                icon()
+                Spacer(Modifier.width(5.dp))
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                formatDuration(totalMinutes),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+    if (open) {
+        HourMinutePickerSheet(
+            title = title,
+            initialTotalMinutes = totalMinutes,
+            minMinutes = 0,
+            maxMinutes = 1440,
+            minuteStep = 10,
+            onDismiss = { open = false },
+            onConfirm = { picked ->
+                onPick(picked.coerceIn(0, 1440))
+                open = false
+            }
+        )
+    }
+}
+
 // 그 외의 유틸리티 함수들
 private fun formatDuration(totalMinutes: Int): String {
     val m = max(0, totalMinutes)
@@ -922,7 +1036,7 @@ private fun PinLockScreen (
         ) {
             // 자물쇠 아이콘
             Icon(
-                Icons.Outlined.Lock,
+                Icons.Rounded.Lock,
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.primary

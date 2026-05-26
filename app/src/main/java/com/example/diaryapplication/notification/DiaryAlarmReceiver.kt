@@ -26,10 +26,10 @@ class DiaryAlarmReceiver : BroadcastReceiver() {
             manager.createNotificationChannel(channel)
         }
 
-        // 알람 클릭 시 앱 실행
+        // 알람 클릭 시 앱 실행 하도록 설정
         val pendingIntent = PendingIntent.getActivity(
             context, 0,
-            Intent(context, MainActivity::class.java),
+            Intent(context, MainActivity::class.java), // 실행할 화면
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -45,7 +45,7 @@ class DiaryAlarmReceiver : BroadcastReceiver() {
         val prefs = context.getSharedPreferences("alarm_prefs", Context.MODE_PRIVATE)
         val hour = prefs.getInt("alarm_hour", 21)
         val minute = prefs.getInt("alarm_minute", 0)
-        NotificationHelper.scheduleDailyAlarm(context, hour, minute)
+        NotificationHelper.scheduleDailyAlarm(context, hour, minute) // 다음 날 동일한 시간에 알림 설정 -> 안해주면 수동으로 매번 다시 설정해야함
 
         manager.notify(1001, notification)
     }

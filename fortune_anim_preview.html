@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>포춘쿠키 애니메이션 미리보기</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Noto Sans KR', sans-serif;
+    background: #cdd3de;
+    padding: 40px 20px 60px;
+    display: flex; flex-direction: column; align-items: center; gap: 24px;
+  }
+  h1 { font-size: 12px; font-weight: 700; color: #888; letter-spacing: 0.1em; text-transform: uppercase; }
+  .subtitle { font-size: 11px; color: #6b7280; }
+  .row { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .tag { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 12px; }
+  .tag-1 { color: #1D4ED8; background: #DBEAFE; }
+  .tag-2 { color: #7C3AED; background: #EDE9FE; }
+  .tag-3 { color: #065F46; background: #D1FAE5; }
+  .tag-4 { color: #92400E; background: #FEF3C7; }
+  .phone-label { font-size: 13px; font-weight: 700; color: #1a1a2e; }
+  .desc { font-size: 11px; color: #6b7280; text-align: center; max-width: 220px; line-height: 1.7; }
+  .replay-btn {
+    font-size: 11px; font-weight: 700; color: white;
+    background: #374151; border-radius: 999px;
+    padding: 5px 14px; cursor: pointer; border: none;
+    margin-top: 2px;
+  }
+  .replay-btn:hover { background: #1f2937; }
+
+  .phone {
+    width: 270px; height: 580px;
+    border-radius: 36px;
+    overflow: hidden;
+    box-shadow: 0 24px 56px rgba(0,0,0,0.18);
+    display: flex; flex-direction: column;
+    padding: 18px 14px 14px;
+    background: linear-gradient(165deg, #EEF0FF 0%, #E8EEFF 50%, #EEF3FF 100%);
+  }
+
+  /* 공통 채팅 UI */
+  .header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .header-icon {
+    width: 40px; height: 40px; border-radius: 15px;
+    background: linear-gradient(135deg, #1D4ED8, #3D7BF4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(29,78,216,0.35);
+  }
+  .header-title { font-size: 14px; font-weight: 800; color: #1a1a2e; }
+  .header-sub { font-size: 10px; color: #6b7280; }
+
+  .chat-area { flex: 1; display: flex; flex-direction: column; gap: 9px; overflow: hidden; }
+
+  .bot-row { display: flex; align-items: flex-start; gap: 6px; }
+  .mini-av {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: linear-gradient(135deg, #1D4ED8, #3D7BF4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+  }
+  .bot-bub {
+    background: white; border-radius: 4px 16px 16px 16px;
+    padding: 9px 12px; max-width: 185px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    font-size: 11px; color: #1a1a2e; line-height: 1.5;
+  }
+  .bot-bub .tm { font-size: 9px; color: #9ca3af; margin-top: 3px; }
+  .user-bub {
+    background: linear-gradient(135deg, #1D4ED8, #3D7BF4);
+    border-radius: 16px 4px 16px 16px;
+    padding: 9px 12px; max-width: 160px;
+    margin-left: auto;
+    font-size: 11px; color: white; line-height: 1.5;
+  }
+  .user-bub .tm { font-size: 9px; color: rgba(255,255,255,0.6); margin-top: 3px; }
+
+  /* 포춘쿠키 카드 공통 */
+  .fortune {
+    border-radius: 18px;
+    background: linear-gradient(135deg, #1E1B4B, #312E81);
+    padding: 14px;
+    box-shadow: 0 6px 24px rgba(30,27,75,0.4);
+    position: relative; overflow: hidden;
+  }
+  .fortune::after {
+    content: '';
+    position: absolute; top: -25px; right: -25px;
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(139,92,246,0.18);
+  }
+  .fortune-top { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+  .fortune-emoji { font-size: 20px; }
+  .fortune-title { font-size: 11px; font-weight: 800; color: white; }
+  .fortune-sub { font-size: 9px; color: rgba(255,255,255,0.5); margin-top: 1px; }
+  .fortune-divider { height: 1px; background: rgba(255,255,255,0.1); margin-bottom: 10px; }
+  .fortune-text {
+    font-size: 12px; color: rgba(255,255,255,0.9);
+    line-height: 1.65; font-weight: 500; position: relative; z-index: 1;
+  }
+  .fortune-time {
+    text-align: right; font-size: 9px;
+    color: rgba(255,255,255,0.4); margin-top: 10px;
+    position: relative; z-index: 1;
+  }
+
+  /* ══════════════════════════════
+     1. 페이드인 + 슬라이드업
+  ══════════════════════════════ */
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .anim-fade-slide {
+    animation: fadeSlideUp 0.5s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+  }
+
+  /* ══════════════════════════════
+     2. 스케일 팝 (탄성 효과)
+  ══════════════════════════════ */
+  @keyframes scalePop {
+    0%   { opacity: 0; transform: scale(0.6); }
+    70%  { opacity: 1; transform: scale(1.04); }
+    100% { transform: scale(1); }
+  }
+  .anim-scale-pop {
+    animation: scalePop 0.5s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+  }
+
+  /* ══════════════════════════════
+     3. 탑 다운 리빌 (봉투 열기)
+  ══════════════════════════════ */
+  @keyframes topDownReveal {
+    from { opacity: 0; clip-path: inset(0 0 100% 0 round 18px); }
+    to   { opacity: 1; clip-path: inset(0 0 0% 0 round 18px); }
+  }
+  .anim-reveal {
+    animation: topDownReveal 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  /* ══════════════════════════════
+     4. 글로우 페이드인
+  ══════════════════════════════ */
+  @keyframes glowFade {
+    0%   { opacity: 0; transform: scale(0.96); box-shadow: 0 0 0px rgba(139,92,246,0); }
+    40%  { opacity: 1; transform: scale(1.01); box-shadow: 0 0 30px rgba(139,92,246,0.6); }
+    100% { transform: scale(1); box-shadow: 0 6px 24px rgba(30,27,75,0.4); }
+  }
+  .anim-glow {
+    animation: glowFade 0.7s ease-out forwards;
+  }
+
+  /* 재생 대기 상태 (숨김) */
+  .fortune.hidden { opacity: 0; }
+</style>
+</head>
+<body>
+
+<h1>포춘쿠키 애니메이션 미리보기</h1>
+<p class="subtitle">▶ 재생 버튼을 눌러 각 애니메이션을 확인하세요</p>
+
+<div class="row">
+
+  <!-- 1. 페이드인 + 슬라이드업 -->
+  <div class="phone-wrap">
+    <span class="tag tag-1">1번</span>
+    <div class="phone-label">페이드인 + 슬라이드업</div>
+    <div class="phone">
+      <div class="header">
+        <div class="header-icon">✨</div>
+        <div><div class="header-title">감정 챗봇</div><div class="header-sub">당신의 이야기를 들려주세요</div></div>
+      </div>
+      <div class="chat-area">
+        <div class="bot-row"><div class="mini-av">✨</div><div class="bot-bub">힘든 마음 나눠주셔서 감사해요 😊<div class="tm">15:42</div></div></div>
+        <div class="user-bub">많이 도움이 됐어요<div class="tm">15:43</div></div>
+        <div class="fortune hidden" id="card1">
+          <div class="fortune-top"><div class="fortune-emoji">🍪</div><div><div class="fortune-title">오늘의 포춘쿠키</div><div class="fortune-sub">당신을 위한 오늘의 한 마디</div></div></div>
+          <div class="fortune-divider"></div>
+          <div class="fortune-text">작은 한 걸음이 큰 변화의 시작입니다. 오늘 용기를 낸 당신을 응원해요.</div>
+          <div class="fortune-time">15:43</div>
+        </div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="play('card1','anim-fade-slide')">▶ 재생</button>
+    <div class="desc">아래에서 위로 자연스럽게 등장<br>가장 무난하고 자연스러운 느낌<br><b>Compose: slideInVertically + fadeIn</b></div>
+  </div>
+
+  <!-- 2. 스케일 팝 -->
+  <div class="phone-wrap">
+    <span class="tag tag-2">2번</span>
+    <div class="phone-label">스케일 팝 (탄성)</div>
+    <div class="phone">
+      <div class="header">
+        <div class="header-icon">✨</div>
+        <div><div class="header-title">감정 챗봇</div><div class="header-sub">당신의 이야기를 들려주세요</div></div>
+      </div>
+      <div class="chat-area">
+        <div class="bot-row"><div class="mini-av">✨</div><div class="bot-bub">힘든 마음 나눠주셔서 감사해요 😊<div class="tm">15:42</div></div></div>
+        <div class="user-bub">많이 도움이 됐어요<div class="tm">15:43</div></div>
+        <div class="fortune hidden" id="card2">
+          <div class="fortune-top"><div class="fortune-emoji">🍪</div><div><div class="fortune-title">오늘의 포춘쿠키</div><div class="fortune-sub">당신을 위한 오늘의 한 마디</div></div></div>
+          <div class="fortune-divider"></div>
+          <div class="fortune-text">작은 한 걸음이 큰 변화의 시작입니다. 오늘 용기를 낸 당신을 응원해요.</div>
+          <div class="fortune-time">15:43</div>
+        </div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="play('card2','anim-scale-pop')">▶ 재생</button>
+    <div class="desc">작게 시작해서 살짝 튀어나오며 등장<br>특별한 순간을 강조하는 느낌<br><b>Compose: scaleIn + spring()</b></div>
+  </div>
+
+  <!-- 3. 탑 다운 리빌 -->
+  <div class="phone-wrap">
+    <span class="tag tag-3">3번</span>
+    <div class="phone-label">탑 다운 리빌 (봉투)</div>
+    <div class="phone">
+      <div class="header">
+        <div class="header-icon">✨</div>
+        <div><div class="header-title">감정 챗봇</div><div class="header-sub">당신의 이야기를 들려주세요</div></div>
+      </div>
+      <div class="chat-area">
+        <div class="bot-row"><div class="mini-av">✨</div><div class="bot-bub">힘든 마음 나눠주셔서 감사해요 😊<div class="tm">15:42</div></div></div>
+        <div class="user-bub">많이 도움이 됐어요<div class="tm">15:43</div></div>
+        <div class="fortune hidden" id="card3">
+          <div class="fortune-top"><div class="fortune-emoji">🍪</div><div><div class="fortune-title">오늘의 포춘쿠키</div><div class="fortune-sub">당신을 위한 오늘의 한 마디</div></div></div>
+          <div class="fortune-divider"></div>
+          <div class="fortune-text">작은 한 걸음이 큰 변화의 시작입니다. 오늘 용기를 낸 당신을 응원해요.</div>
+          <div class="fortune-time">15:43</div>
+        </div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="play('card3','anim-reveal')">▶ 재생</button>
+    <div class="desc">위에서 아래로 천천히 펼쳐지며 등장<br>봉투/편지 여는 느낌으로 두근두근<br><b>Compose: AnimatedVisibility + expandVertically</b></div>
+  </div>
+
+  <!-- 4. 글로우 페이드인 -->
+  <div class="phone-wrap">
+    <span class="tag tag-4">4번</span>
+    <div class="phone-label">글로우 페이드인</div>
+    <div class="phone">
+      <div class="header">
+        <div class="header-icon">✨</div>
+        <div><div class="header-title">감정 챗봇</div><div class="header-sub">당신의 이야기를 들려주세요</div></div>
+      </div>
+      <div class="chat-area">
+        <div class="bot-row"><div class="mini-av">✨</div><div class="bot-bub">힘든 마음 나눠주셔서 감사해요 😊<div class="tm">15:42</div></div></div>
+        <div class="user-bub">많이 도움이 됐어요<div class="tm">15:43</div></div>
+        <div class="fortune hidden" id="card4">
+          <div class="fortune-top"><div class="fortune-emoji">🍪</div><div><div class="fortune-title">오늘의 포춘쿠키</div><div class="fortune-sub">당신을 위한 오늘의 한 마디</div></div></div>
+          <div class="fortune-divider"></div>
+          <div class="fortune-text">작은 한 걸음이 큰 변화의 시작입니다. 오늘 용기를 낸 당신을 응원해요.</div>
+          <div class="fortune-time">15:43</div>
+        </div>
+      </div>
+    </div>
+    <button class="replay-btn" onclick="play('card4','anim-glow')">▶ 재생</button>
+    <div class="desc">은은하게 빛나며 페이드인<br>고급스럽고 차분한 등장 방식<br><b>Compose: fadeIn + animateFloatAsState(shadow)</b></div>
+  </div>
+
+</div>
+
+<script>
+  function play(id, animClass) {
+    const el = document.getElementById(id);
+    el.classList.remove('hidden', 'anim-fade-slide', 'anim-scale-pop', 'anim-reveal', 'anim-glow');
+    void el.offsetWidth; // reflow
+    el.classList.add(animClass);
+  }
+</script>
+</body>
+</html>

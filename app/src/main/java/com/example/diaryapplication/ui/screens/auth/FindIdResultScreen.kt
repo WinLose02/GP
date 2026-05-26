@@ -3,8 +3,8 @@ package com.example.diaryapplication.ui.screens.auth
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -27,7 +27,7 @@ fun FindIdResultScreen(
                 title = {},
                 navigationIcon = {
                     IconButton(onClick = onClose) {
-                        Icon(Icons.Outlined.Close, null)
+                        Icon(Icons.Rounded.Close, null)
                     }
                 }
             )
@@ -54,7 +54,7 @@ fun FindIdResultScreen(
             }
 
             RoundedCard(modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Email, null)
+                Icon(Icons.Rounded.Email, null)
                 Spacer(Modifier.height(10.dp))
                 Text("회원님의 이메일은", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(6.dp))

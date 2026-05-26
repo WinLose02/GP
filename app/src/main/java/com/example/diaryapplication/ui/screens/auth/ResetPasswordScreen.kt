@@ -3,8 +3,8 @@ package com.example.diaryapplication.ui.screens.auth
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.runtime.*
@@ -40,7 +40,7 @@ fun ResetPasswordScreen(
                 title = { Text("비밀번호 변경") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Outlined.ArrowBack, null)
+                        Icon(Icons.Rounded.ArrowBack, null)
                     }
                 }
             )
@@ -54,7 +54,7 @@ fun ResetPasswordScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             RoundedCard(modifier = Modifier.fillMaxWidth()) { // 인증 완료 안내
-                Icon(Icons.Outlined.CheckCircle, null)
+                Icon(Icons.Rounded.CheckCircle, null)
                 Spacer(Modifier.height(10.dp))
                 Text("인증이 완료되었습니다", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))

@@ -3,8 +3,8 @@ package com.example.diaryapplication.ui.screens.auth
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -29,7 +29,7 @@ fun VerifyCodeScreen(
                     IconButton(onClick = onBack) {
                         // <- 뒤로가기 화살표 아이콘
                         // 클릭 시, onBack() 실행
-                        Icon(Icons.Outlined.ArrowBack, null)
+                        Icon(Icons.Rounded.ArrowBack, null)
                     }
                 }
             )
@@ -56,7 +56,7 @@ fun VerifyCodeScreen(
             
             // 이메일 발송 확인 파트 디자인
             RoundedCard(modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Email, null) // 아이콘 표시
+                Icon(Icons.Rounded.Email, null) // 아이콘 표시
                 Spacer(Modifier.height(10.dp))
                 Text("비밀번호 재설정 링크가 발송되었습니다", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(6.dp))
