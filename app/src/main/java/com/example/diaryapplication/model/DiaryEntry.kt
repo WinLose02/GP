@@ -11,6 +11,6 @@ data class DiaryEntry(
     val routine: String = "", // 하루 일과
     val bestThing: String = "", // 가장 좋았던 일
     val regretThing: String = "", // 가장 아쉬웠던 일
-    val imageUrl: String = "", // TODO: 사진 URL (Firebase Storage와 연동 예정)
-    val emotionEmoji: String = "" // TODO: 감정 이모지 (AI 감정 분석 연동 예정)
+    val imageUrl: String = "", // 사진 URL
+    val emotionEmoji: String = "" // 감정 이모지
 )

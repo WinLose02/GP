@@ -25,7 +25,7 @@ class ChatRepository {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
     //private val serverUrl = "http://192.168.123.104:8000"
-    private val serverUrl = "http://172.30.1.71:8000"
+    private val serverUrl = "http://34.50.19.184:8000" // Google Cloud IP Address
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)

@@ -51,6 +51,8 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import android.view.ContextThemeWrapper
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 
 // 날씨 타입
 private enum class WeatherType(val label: String, val icon: @Composable () -> Unit) {
@@ -247,7 +249,12 @@ fun DiaryScreen(
         3. 그 외 탭이나 앱을 종료하면, 생명 주기 관리인 lifecycleOwner에 의해 자동으로 카메라 종료
      */
 
-    Box(modifier = Modifier.size(1.dp)) {
+    Box(modifier = Modifier
+        .size(1.dp)
+        .alpha(0f)
+        .clipToBounds()
+        .requiredSize(1.dp)
+    ) {
         if(hasCameraPermission) { // 카메라 권한이 허용된 경우에만 카메라를 실행
             AndroidView( // PreviewView가 Android View 형태이므로 AndroidView로 감싸야 함
                 factory = { ctx ->
@@ -296,9 +303,11 @@ fun DiaryScreen(
     }
 
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { _ ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -520,6 +529,13 @@ fun DiaryScreen(
                     .padding(bottom = 12.dp)
             )
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(padding)
+        )
     }
 }
 

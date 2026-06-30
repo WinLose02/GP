@@ -161,7 +161,7 @@ class DiaryRepository {
 
                 val request = Request.Builder()
                     //.url("http://192.168.123.104:8080/analyze")
-                    .url("http://192.168.0.2:8080/analyze")
+                    .url("http://34.50.19.184:8080/analyze") // Google Cloud IP Address
                     .post(requestBody)
                     .build()
 

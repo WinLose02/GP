@@ -36,6 +36,25 @@ import java.util.Locale
 import java.time.DayOfWeek
 import java.time.temporal.TemporalAdjusters
 
+val emotionQuestion = listOf(
+    "오늘 가장 마음이 편했던 순간은\n언제였나요?",    "오늘 나를 웃게 만든\n일이 있었나요?",
+    "오늘 하루 중 가장 기억에 남는\n장면은 무엇인가요?", "오늘 스스로를 칭찬하고 싶은\n순간이 있었나요?",
+    "오늘 조금 힘들었던 일이 있었다면\n무엇인가요?",   "오늘 가장 많이 떠올랐던 생각은\n무엇인가요?",
+    "오늘 나에게 가장 필요했던 위로는\n무엇이었나요?",  "오늘 하루를 한 단어로 표현한다면\n무엇일까요?",
+    "오늘 가장 평온했던 시간은\n언제였나요?",   "오늘 작은 행복을 느낀 순간이\n있었나요?",
+    "오늘 스스로에게 해주고 싶은 말은\n무엇인가요?", "오늘 가장 긴장되거나 떨렸던 순간은\n언제였나요?",
+    "오늘 하루 중 가장 몰입했던 일은\n무엇인가요?",   "오늘 가장 뿌듯했던 일은 무엇인가요?",
+    "오늘 나를 가장 지치게 만든 일은\n무엇이었나요?",  "오늘 의외로 기분 좋았던 순간이\n있었나요?",
+    "오늘 나만의 작은 성취가 있었다면\n무엇인가요?",   "오늘 가장 솔직한 감정은\n무엇이었나요?",
+    "오늘 마음이 복잡했던\n순간이 있었나요?",    "오늘 하루 중 가장 여유로웠던\n시간은 언제였나요?",
+    "오늘 나를 미소 짓게 한 작은 일이\n있었나요?",   "오늘 하루를 돌아봤을 때 가장 잘한 선택은\n무엇인가요?",
+    "오늘 마음 한구석에 남아있는\n걱정이 있나요?",     "오늘 나에게 일어난 가장 의미 있는 일은\n무엇인가요?",
+    "오늘 내일의 나에게 하고 싶은 말이 있다면\n무엇인가요?",  "오늘 가장 나답다고 느낀 순간은\n언제였나요?",
+    "오늘 스스로에게 가장 솔직해진 순간이\n있었나요?",  "오늘 무심코 지나친 감정이 있다면\n무엇인가요?",
+    "오늘 나에게 휴식이 필요했던 순간은\n언제였나요?",  "오늘 가장 나를 힘 나게 한 생각은\n무엇이었나요?",
+)
+
+
 @Composable
 fun HomeScreen(
     padding: PaddingValues, // 패딩 값
@@ -68,7 +87,6 @@ fun HomeScreen(
     }
 
     // 카드 진입 애니메이션 트리거
-    // false로 시작했다가 최초 컴포지션 직후 true로 바뀌면서 AnimatedVisibility가 실행됨
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
 
@@ -127,7 +145,6 @@ fun HomeScreen(
     // 이번 주 일요일 ~ 오늘까지의 날씨 이모지 목록을 생성
     // plusDays -> 일요일에서 i일을 더한 날짜
     // takeIf -> 오늘 이후의 날짜는 제외
-    // .let{} -> 해당 날짜가 있으면 이모지를 추가하되, 현재는 하드 코딩으로 임시로 대체한 상태
     val weekWeatherEmojis = remember(today, emotionEmojiMap) {
         (0..6).map { i ->
             val date = weekStart.plusDays(i.toLong())
@@ -158,8 +175,8 @@ fun HomeScreen(
         else "${weekStart.monthValue}월 ${weekStart.dayOfMonth}일 ~ ${weekEnd.monthValue}월 ${weekEnd.dayOfMonth}일"
     }
 
-    // TODO: 오늘의 질문 -> 이 부분은 질문을 여러개 만들어서 랜덤으로 출력해도 괜찮을것 같음
-    val todayQuestion = "오늘 가장 마음이 편했던 순간은 언제였나요?"
+    val todayQuestion = emotionQuestion.random()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -169,15 +186,15 @@ fun HomeScreen(
             .padding(horizontal = 20.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 헤더 인사말 : 딜레이 없이 가장 먼저 등장
+        // 홈 화면 카드 등장 애니메이션
+        fun <T> cardEnterSpec(delay: Int): FiniteAnimationSpec<T> =
+            tween(durationMillis = 650, delayMillis = delay, easing = FastOutSlowInEasing)
+
+        // 헤더 인사말
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(animationSpec = tween(durationMillis = 500)) +
-                    // StiffnessLow : 스프링이 천천히 움직여 여유 있는 진입감
-                    slideInVertically(animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )) { 60 }
+            enter = fadeIn(animationSpec = cardEnterSpec(0)) +
+                    slideInVertically(animationSpec = cardEnterSpec(0)) { 40 }
         ) {
             HomeGreetingHeader(
                 greeting = greeting,
@@ -188,11 +205,8 @@ fun HomeScreen(
         // 빠른 통계 카드
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 100)) +
-                    slideInVertically(animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )) { 60 }
+            enter = fadeIn(animationSpec = cardEnterSpec(150)) +
+                    slideInVertically(animationSpec = cardEnterSpec(150)) { 40 }
         ) {
             QuickStatsRow(
                 streakCount = streakCount,
@@ -203,11 +217,8 @@ fun HomeScreen(
         // 오늘의 질문 카드
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 200)) +
-                    slideInVertically(animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )) { 60 }
+            enter = fadeIn(animationSpec = cardEnterSpec(300)) +
+                    slideInVertically(animationSpec = cardEnterSpec(300)) { 40 }
         ) {
             TodayQuestionCard(
                 question = todayQuestion,
@@ -217,11 +228,8 @@ fun HomeScreen(
         // 이번달 나의 기록 카드
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 350)) +
-                    slideInVertically(animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )) { 60 }
+            enter = fadeIn(animationSpec = cardEnterSpec(450)) +
+                    slideInVertically(animationSpec = cardEnterSpec(450)) { 40 }
         ) {
             MonthlyRecordCard(
                 streakGrid = streakGrid,
@@ -284,7 +292,6 @@ private fun TodayQuestionCard(
             .clip(RoundedCornerShape(20.dp))
             .background(gradient)
     ) {
-        // 장식 원
         Box(
             modifier = Modifier
                 .size(130.dp)
@@ -428,9 +435,14 @@ private fun MonthlyRecordCard(
                                 monthStart.plusDays((dayOfMonth - 1).toLong()) else null
                             val isToday = cellDate == today
 
+
                             val cellAlpha by animateFloatAsState(
                                 targetValue = if (waveVisible) 1f else 0f,
-                                animationSpec = tween(durationMillis = 400, delayMillis = cellIndex * 40),
+                                animationSpec = tween(
+                                    durationMillis = 450,
+                                    delayMillis = cellIndex * 16,
+                                    easing = FastOutSlowInEasing
+                                ),
                                 label = "cellAlpha_$cellIndex"
                             )
                             Box(
@@ -613,6 +625,6 @@ private fun emotionToWeatherEmoji(emotionEmoji:String?) : String {
         "😰" -> "🌀️"  // 불안  → 바람
         "😳" -> "🌦️"  // 당황  → 소나기
         "❎" -> "❎"   // 분석 실패 → 구름 조금
-        else -> ""  // 기록 없음 → 안개 (회색)
+        else -> ""  // 기록 없음
     }
 }

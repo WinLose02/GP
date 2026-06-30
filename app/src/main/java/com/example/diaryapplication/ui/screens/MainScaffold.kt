@@ -3,6 +3,7 @@ package com.example.diaryapplication.ui.screens
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -59,13 +60,22 @@ fun MainScaffold(onLogout: () -> Unit) {
             )
         }
     ) { inner ->
+
+        // 탭 전환 애니메이션
+        val tabTransitionSpec = tween<Float>(durationMillis = 600, easing = FastOutSlowInEasing)
         NavHost(
             navController = nav,
             startDestination = Route.Home.path,
-            enterTransition = { fadeIn(animationSpec = tween(600)) },
-            exitTransition = { fadeOut(animationSpec = tween(600)) },
-            popEnterTransition = { fadeIn(animationSpec = tween(600)) },
-            popExitTransition = { fadeOut(animationSpec = tween(600)) }
+            enterTransition = {
+                fadeIn(animationSpec = tabTransitionSpec) +
+                        scaleIn(initialScale = 0.96f, animationSpec = tabTransitionSpec)
+            },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = {
+                fadeIn(animationSpec = tabTransitionSpec) +
+                        scaleIn(initialScale = 0.96f, animationSpec = tabTransitionSpec)
+            },
+            popExitTransition = { ExitTransition.None }
         ) {
             composable(Route.Home.path) {
                 HomeScreen(
@@ -114,7 +124,6 @@ private fun LucideFabBottomBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit
 ) {
-    // 좌 2개 / 우 2개 탭 항목 (홈 FAB 제외)
     val leftItems = listOf(
         Triple(Route.Diary.path, "일기", R.drawable.ic_book_open),
         Triple(Route.Chat.path, "챗봇", R.drawable.ic_message_circle),
@@ -127,20 +136,20 @@ private fun LucideFabBottomBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp)
+            .wrapContentHeight()
     ) {
         // 흰색 탭 바 (하단에 고정)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
                 .align(Alignment.BottomCenter),
             color = Color.White,
             shadowElevation = 8.dp
         ) {
             Row(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .height(64.dp)
                     .navigationBarsPadding(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -168,10 +177,12 @@ private fun LucideFabBottomBar(
         }
 
         // 살짝 떠 있는 홈 버튼
+        // TopCenter 정렬 후 위로 offset을 줘서 Surface 상단에 걸치게 함.
         Box(
             modifier = Modifier
                 .size(52.dp)
                 .align(Alignment.TopCenter)
+                .offset(y = (-16).dp)
                 .shadow(8.dp, CircleShape)
                 .clip(CircleShape)
                 .background(

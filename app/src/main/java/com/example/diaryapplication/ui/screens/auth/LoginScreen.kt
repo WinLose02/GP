@@ -24,6 +24,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.diaryapplication.viewmodel.AuthViewModel
 
+val greetingMessage = listOf(
+    "안녕하세요,\n다시 만났네요 👋",    "오늘도\n좋은 하루 보내세요 🌤️",
+    "반가워요,\n오늘 하루는 어떠셨나요? ☺️",  "어서 오세요,\n오늘의 이야기를 들려주세요 📖",
+    "오늘 하루도\n수고 많으셨어요 🌿", "다시 만나서\n반가워요 ✨",
+    "오늘은 어떤 감정으로\n하루를 채우셨나요? 💭",   "잠깐 쉬어가도\n괜찮아요 🍃",
+    "당신의 하루가\n궁금해요 🌙",  "오늘도 와주셔서\n고마워요 😊",
+    "마음 편히\n이야기해주세요 🤍", "오늘 하루도\n잘 마무리해봐요 🌙"
+)
+
 @Composable
 fun LoginScreen(
     viewModel: AuthViewModel = viewModel(),
@@ -67,7 +76,7 @@ fun LoginScreen(
                         )) { 40 }
             ) {
                 Text(
-                    text = "안녕하세요,\n다시 만났네요 👋",
+                    text = remember { greetingMessage.random() },
                     fontSize = 34.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
