@@ -1,4 +1,5 @@
 package com.example.diaryapplication.repository
+
 import android.content.Context
 import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
@@ -17,6 +18,16 @@ import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import com.example.diaryapplication.model.DiaryEntry
 import com.example.diaryapplication.repository.ChatResponse
+import com.google.firebase.database.FirebaseDatabase
+
+// 감정 분석 서버(/analyze)가 반환하는 JSON을 담는 구조체.
+data class EmotionAnalysis(
+    val emotion: String,               // 최종 감정 라벨 ("emotion")
+    val prob: Map<String, Double>,     // 감정별 확률 ("prob")
+    val textEmotion: String,           // 텍스트 기반 감정 ("text_emotion")
+    val videoEmotion: String,          // 영상 기반 감정 ("video_emotion", 없으면 "")
+    val videoPath: String              // 서버 저장 경로 ("video_path")
+)
 
 
 class DiaryRepository {
@@ -94,13 +105,34 @@ class DiaryRepository {
 
     // AI 서버가 감정 분석한 결과를
     // DB에 저장하는 함수
-    suspend fun saveEmotionResult(diaryId: String, finalEmotion: String) {
+    suspend fun saveEmotionResult(
+        diaryId: String,
+        finalEmotion: String,
+        textEmotion: String,
+        videoEmotion: String,
+        prob: Map<String, Double>
+    ) {
         db.collection("diaries").document(diaryId)
             .collection("emotion_result").document("result")
             .set(mapOf(
                 "final_emotion" to finalEmotion,
+                "text_emotion" to textEmotion,
+                "video_emotion" to videoEmotion,
+                "prob" to prob,
                 "created_at" to com.google.firebase.Timestamp.now()
             )).await()
+    }
+
+    // Firebase Realtim DB
+    // ESP32 읽기 전용
+    suspend fun saveEmotionToRTDB(finalEmotion: String) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        FirebaseDatabase.getInstance().reference
+            .child("emotion_latest")
+            .child(uid)
+            .child("final_emotion")
+            .setValue(finalEmotion)
+            .await()
     }
 
     // 메인 홈 화면에 스트릿 데이터를 표시하기 위해
@@ -138,13 +170,13 @@ class DiaryRepository {
 
 
     // 작성한 일기의 텍스트와 전면 카메라로 촬영한 얼굴 영상을 AI 서버로 보내는 함수
-    // 성공 시에는 감정 결과를 반환하며, 실패 시 null을 반환
+    // 성공 시에는 감정 분석 결과 전체(EmotionAnalysis)를 반환하며, 실패 시 null을 반환
     suspend fun sendVideoToServer(
         videoFile: File,
         diaryText: String,
         uid: String,
         diaryDate: String
-    ): String? {
+    ): EmotionAnalysis? {
         return withContext(Dispatchers.IO) {
             try {
                 val requestBody = MultipartBody.Builder()
@@ -170,10 +202,31 @@ class DiaryRepository {
                 if (response.isSuccessful) {
                     val body = response.body?.string() ?: return@withContext null
                     val json = org.json.JSONObject(body)
-                    json.getString("emotion") // 감정 결과 반환
+
+                    // 서버가 명시적으로 success가 아니면 처리
+                    if (json.optString("status") != "success") return@withContext null
+
+                    // "prob"는 { 라벨: 확률 } 형태의 JSON 객체 → Map<String, Double>로 변환
+                    val probJson = json.optJSONObject("prob")
+                    val prob = mutableMapOf<String, Double>()
+                    if (probJson != null) {
+                        val keys = probJson.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            prob[key] = probJson.getDouble(key)
+                        }
+                    }
+
+                    EmotionAnalysis(
+                        emotion      = json.getString("emotion"),
+                        prob         = prob,
+                        textEmotion  = json.optString("text_emotion", ""),
+                        videoEmotion = json.optString("video_emotion", ""),
+                        videoPath    = json.optString("video_path", "")
+                    )
                 } else null
             } catch (e: Exception) {
-                null // 네트워크 오류 시 null 반환
+                null // 네트워크 오류/파싱 오류 시 null 반환
             } finally {
                 if (videoFile.exists()) videoFile.delete() // 임시 파일 삭제
             }

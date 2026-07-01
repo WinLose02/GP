@@ -146,29 +146,6 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
 
                 viewModelScope.launch {
 
-                    /*
-                    // 영상 파일이 있으면 서버로 전송
-                    if (videoFile != null) {
-                        val emotion = diaryrepository.sendVideoToServer(
-                            videoFile = videoFile,
-                            diaryText = content,
-                            uid = uid,
-                            diaryDate = dateStr
-                        )
-
-                        if (emotion != null) {
-                            val diary = diaryrepository.getDiary(uid, dateStr)
-                            diary?.let {
-                                val emotionEmoji = getEmotionEmoji(emotion)
-                                if (emotionEmoji.isNotEmpty()) {
-                                    diaryrepository.updateEmotionEmoji(it.id, emotionEmoji)
-                                    loadMonthEmojis(date.year, date.monthValue)
-                                }
-                            }
-                        }
-                    }
-                     */
-
                     // 두 서버를 동시에 호출
                     val videoDeferred = async {
                         if(videoFile != null) {
@@ -198,14 +175,23 @@ class DiaryViewModel : ViewModel() { // ViewModel을 상속받아 DiaryViewModel
                     val chatResponse = chatDeferred.await()
 
                     // 영상 분석 결과를 처리
-                    emotion?.let {
-                        val diary = diaryrepository.getDiary(uid, dateStr)
-                        diary?.let { d->
-                            val emotionEmoji = getEmotionEmoji(it)
-                            if(emotionEmoji.isNotEmpty()) {
-                                diaryrepository.updateEmotionEmoji(d.id, emotionEmoji)
-                                loadMonthEmojis(date.year, date.monthValue)
-                            }
+                    emotion?.let { result ->
+                        diaryrepository.saveEmotionResult(
+                            diaryId      = diaryId,
+                            finalEmotion = result.emotion,
+                            textEmotion  = result.textEmotion,
+                            videoEmotion = result.videoEmotion,
+                            prob         = result.prob
+                        )
+
+                        // (2) ESP32용 RealtimeDB에 저장
+                        diaryrepository.saveEmotionToRTDB(finalEmotion = result.emotion)
+
+                        // (3) 달력 표시용 이모지 필드 갱신
+                        val emotionEmoji = getEmotionEmoji(result.emotion)
+                        if (emotionEmoji.isNotEmpty()) {
+                            diaryrepository.updateEmotionEmoji(diaryId, emotionEmoji)
+                            loadMonthEmojis(date.year, date.monthValue)
                         }
                     }
 
