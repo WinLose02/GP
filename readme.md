@@ -3,5 +3,5 @@ This is a repository to manage our graduation project, which is "Multimodel-base
 Our members are Seungjin Jeong, ChanYoung Joo, *(Equal Contribution).
 
 ## Contributors
-Seungjin Jeong(MER) - [github](https://github.com/WinLose02)
+Seungjin Jeong(MER) - [github](https://github.com/WinLose02) \n
 ChanYoung Joo(Mobile, MCU) - [github](https://github.com/chanyoungjoo)
